@@ -1,0 +1,86 @@
+package cli
+
+import (
+	"fmt"
+	"os/exec"
+
+	"github.com/spf13/cobra"
+
+	"github.com/jeefy/convergence/internal/k8s"
+)
+
+var clusterCmd = &cobra.Command{
+	Use:   "cluster",
+	Short: "Manage Kubernetes cluster deployments of Convergence",
+}
+
+var clusterInstallCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install Convergence onto your active Kubernetes cluster",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ns, _ := cmd.Flags().GetString("namespace")
+		prov, _ := cmd.Flags().GetString("provider")
+		copilotTok, _ := cmd.Flags().GetString("copilot-token")
+		openaiKey, _ := cmd.Flags().GetString("openai-key")
+		anthropicKey, _ := cmd.Flags().GetString("anthropic-key")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		opts := &k8s.ClusterOptions{
+			Namespace:    ns,
+			Provider:     prov,
+			CopilotToken: copilotTok,
+			OpenAIKey:    openaiKey,
+			AnthropicKey: anthropicKey,
+			DryRun:       dryRun,
+		}
+
+		manifests, err := k8s.RenderManifests(opts)
+		if err != nil {
+			return err
+		}
+
+		if dryRun {
+			fmt.Println(manifests)
+			return nil
+		}
+
+		fmt.Printf("Applying Convergence manifests to namespace '%s'...\n", ns)
+		if err := k8s.ApplyManifests(manifests); err != nil {
+			return err
+		}
+
+		fmt.Printf("Successfully deployed Convergence to cluster in namespace '%s'!\n", ns)
+		return nil
+	},
+}
+
+var clusterStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Check the status of cluster deployments",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ns, _ := cmd.Flags().GetString("namespace")
+		fmt.Printf("Checking pods in namespace '%s'...\n", ns)
+		c := exec.Command("kubectl", "-n", ns, "get", "pods", "-o", "wide")
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("kubectl get pods failed: %w (output: %s)", err, string(out))
+		}
+		fmt.Println(string(out))
+		return nil
+	},
+}
+
+func init() {
+	clusterInstallCmd.Flags().String("namespace", "convergence", "Target Kubernetes namespace")
+	clusterInstallCmd.Flags().String("provider", "copilot", "LLM backend provider: copilot or direct")
+	clusterInstallCmd.Flags().String("copilot-token", "", "GitHub Copilot token")
+	clusterInstallCmd.Flags().String("openai-key", "", "OpenAI API key")
+	clusterInstallCmd.Flags().String("anthropic-key", "", "Anthropic API key")
+	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
+
+	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
+
+	clusterCmd.AddCommand(clusterInstallCmd)
+	clusterCmd.AddCommand(clusterStatusCmd)
+	rootCmd.AddCommand(clusterCmd)
+}

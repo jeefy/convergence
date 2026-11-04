@@ -1,0 +1,241 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stand-in
+  namespace: {{ .Namespace }}
+type: Opaque
+stringData:
+  salt: "{{ .StandinSalt }}"
+{{- if eq .Provider "copilot" }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: convergence-copilot
+  namespace: {{ .Namespace }}
+type: Opaque
+stringData:
+  GH_COPILOT_TOKEN: "{{ .CopilotToken }}"
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: {{ .Namespace }}
+data:
+  config.yaml: |
+    config:
+      statsAddr: 0.0.0.0:15020
+    gateways:
+      default:
+        port: 3000
+        protocol: HTTP
+        extProc: &standin_enforce
+          grpcService:
+            endpoint: stand-in:9101
+          mode:
+            requestHeader: SEND
+            requestBody: FULL_DUPLEX_STREAMED
+            responseHeader: SEND
+            responseBody: FULL_DUPLEX_STREAMED
+          failureMode: FAIL_OPEN
+          timeout: 5s
+    llm:
+      policies:
+        extAuthz:
+          httpService:
+            endpoint: http://pinball:9201/check
+            failureMode: ALLOW
+            timeout: 2s
+          condition: 'json(request.body).model in ["auto", "pinball"]'
+      providers:
+{{- if eq .Provider "copilot" }}
+        copilot-proxy:
+          type: openai
+          baseUrl: http://copilot-api:4141/v1
+{{- else }}
+        openai:
+          type: openai
+          apiKey: "{{ .OpenAIKey }}"
+        anthropic:
+          type: anthropic
+          apiKey: "{{ .AnthropicKey }}"
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  namespace: {{ .Namespace }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agentgateway
+  template:
+    metadata:
+      labels:
+        app: agentgateway
+    spec:
+      containers:
+        - name: agentgateway
+          image: cr.agentgateway.dev/agentgateway:v1.6.0
+          command: ["-f", "/etc/agentgateway/config.yaml"]
+          ports:
+            - containerPort: 3000
+              name: http
+            - containerPort: 15020
+              name: stats
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agentgateway
+      volumes:
+        - name: config
+          configMap:
+            name: agentgateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  namespace: {{ .Namespace }}
+spec:
+  selector:
+    app: agentgateway
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+    - name: stats
+      port: 15020
+      targetPort: 15020
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stand-in
+  namespace: {{ .Namespace }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: stand-in
+  template:
+    metadata:
+      labels:
+        app: stand-in
+    spec:
+      containers:
+        - name: stand-in
+          image: ghcr.io/jeefy/stand-in:v0.4.1
+          env:
+            - name: STANDIN_MODE
+              value: "enforce"
+            - name: STANDIN_SALT
+              valueFrom:
+                secretKeyRef:
+                  name: stand-in
+                  key: salt
+          ports:
+            - containerPort: 9101
+              name: grpc
+            - containerPort: 9102
+              name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stand-in
+  namespace: {{ .Namespace }}
+spec:
+  selector:
+    app: stand-in
+  ports:
+    - name: grpc
+      port: 9101
+      targetPort: 9101
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pinball
+  namespace: {{ .Namespace }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pinball
+  template:
+    metadata:
+      labels:
+        app: pinball
+    spec:
+      containers:
+        - name: pinball
+          image: ghcr.io/jeefy/pinball:v0.6.1
+          ports:
+            - containerPort: 9201
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pinball
+  namespace: {{ .Namespace }}
+spec:
+  selector:
+    app: pinball
+  ports:
+    - name: http
+      port: 9201
+      targetPort: 9201
+{{- if eq .Provider "copilot" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: copilot-api
+  namespace: {{ .Namespace }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: copilot-api
+  template:
+    metadata:
+      labels:
+        app: copilot-api
+    spec:
+      containers:
+        - name: copilot-api
+          image: ghcr.io/ericc-ch/copilot-api:v0.1.25
+          env:
+            - name: COPILOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: convergence-copilot
+                  key: GH_COPILOT_TOKEN
+          ports:
+            - containerPort: 4141
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: copilot-api
+  namespace: {{ .Namespace }}
+spec:
+  selector:
+    app: copilot-api
+  ports:
+    - name: http
+      port: 4141
+      targetPort: 4141
+{{- end }}
