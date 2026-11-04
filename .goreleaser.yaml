@@ -1,0 +1,41 @@
+version: 2
+
+project_name: convergence
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: convergence
+    binary: convergence
+    main: ./cmd/convergence
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/jeefy/convergence/internal/version.Version={{.Version}} -X github.com/jeefy/convergence/internal/version.Commit={{.ShortCommit}} -X github.com/jeefy/convergence/internal/version.Date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - install.sh
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
