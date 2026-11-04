@@ -1,0 +1,45 @@
+services:
+  agentgateway:
+    image: cr.agentgateway.dev/agentgateway:v1.6.0
+    command: ["-f", "/etc/agentgateway/agentgateway.yaml"]
+    restart: unless-stopped
+    ports:
+      - "{{ .Config.GatewayPort }}:3000"
+      - "15020:15020"
+    volumes:
+      - ./agentgateway.yaml:/etc/agentgateway/agentgateway.yaml:ro
+      - ./logs:/var/log/agentgateway:rw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - stand-in
+      - pinball{{ if eq .Config.Provider "copilot" }}
+      - copilot-api{{ end }}
+
+  stand-in:
+    image: ghcr.io/jeefy/stand-in:v0.4.1
+    restart: unless-stopped
+    environment:
+      STANDIN_MODE: enforce
+      STANDIN_SALT: "{{ .Config.StandinSalt }}"
+      STANDIN_GRPC_PORT: "9101"
+      STANDIN_METRICS_PORT: "9102"
+    ports:
+      - "9102:9102"
+
+  pinball:
+    image: ghcr.io/jeefy/pinball:v0.6.1
+    restart: unless-stopped
+    volumes:
+      - ./pinball.yaml:/etc/pinball/pinball.yaml:ro
+    ports:
+      - "9201:9201"
+{{ if eq .Config.Provider "copilot" }}
+  copilot-api:
+    image: ghcr.io/ericc-ch/copilot-api:v0.1.25
+    restart: unless-stopped
+    environment:
+      COPILOT_TOKEN: "{{ .Config.CopilotToken }}"
+    ports:
+      - "4141:4141"
+{{ end }}
