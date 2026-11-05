@@ -1,0 +1,38 @@
+# In-cluster stub OpenAI-compatible upstream for the KinD e2e.
+# Requires ConfigMap "stub-upstream" with key stub.py (created by
+# tests/test_e2e_cluster.sh via `kubectl create configmap --from-file`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stub-upstream
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: stub-upstream}
+  template:
+    metadata:
+      labels: {app: stub-upstream}
+    spec:
+      containers:
+        - name: stub
+          image: python:3.12-alpine
+          command: ["python", "-u", "/app/stub.py"]
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            periodSeconds: 2
+          volumeMounts:
+            - {name: app, mountPath: /app, readOnly: true}
+      volumes:
+        - name: app
+          configMap: {name: stub-upstream}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stub-upstream
+spec:
+  selector: {app: stub-upstream}
+  ports:
+    - {name: http, port: 8080, targetPort: 8080}

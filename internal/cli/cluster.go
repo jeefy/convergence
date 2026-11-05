@@ -25,17 +25,23 @@ var clusterInstallCmd = &cobra.Command{
 		anthropicKey, _ := cmd.Flags().GetString("anthropic-key")
 		optSchedule, _ := cmd.Flags().GetString("opt-schedule")
 		optDSN, _ := cmd.Flags().GetString("optimizer-dsn")
+		failOpen, _ := cmd.Flags().GetBool("fail-open")
+		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
+		modelsFile, _ := cmd.Flags().GetString("models-file")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 		opts := &k8s.ClusterOptions{
-			Namespace:    ns,
-			Provider:     prov,
-			CopilotToken: copilotTok,
-			OpenAIKey:    openaiKey,
-			AnthropicKey: anthropicKey,
-			OptSchedule:  optSchedule,
-			OptimizerDSN: optDSN,
-			DryRun:       dryRun,
+			Namespace:     ns,
+			Provider:      prov,
+			CopilotToken:  copilotTok,
+			OpenAIKey:     openaiKey,
+			AnthropicKey:  anthropicKey,
+			OptSchedule:   optSchedule,
+			OptimizerDSN:  optDSN,
+			FailOpen:      failOpen,
+			OpenAIBaseURL: openaiBase,
+			ModelsFile:    modelsFile,
+			DryRun:        dryRun,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -100,6 +106,10 @@ func init() {
 	clusterInstallCmd.Flags().String("anthropic-key", "", "Anthropic API key")
 	clusterInstallCmd.Flags().String("opt-schedule", "0 3 * * 0", "Cron schedule for pinball optimizer evaluation checks (default: weekly Sunday 03:00)")
 	clusterInstallCmd.Flags().String("optimizer-dsn", "", "Read-only Postgres DSN for the gateway request_logs; enables the pinball optimizer CronJob (stored in Secret pinball-optimizer-db)")
+	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
+	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
+	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
+	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 
 	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")

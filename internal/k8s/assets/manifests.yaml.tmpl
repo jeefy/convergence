@@ -48,7 +48,9 @@ stringData:
           conditional:
             - condition: 'request.method == "POST" && !request.path.endsWith("/embeddings")'
               host: "stand-in.{{ .Namespace }}.svc.cluster.local:9101"
-              failureMode: failOpen
+              # failClosed by default: if Stand-In is down, requests are rejected
+              # rather than sent upstream unscrubbed. --fail-open opts into passthrough.
+              failureMode: {{ if .FailOpen }}failOpen{{ else }}failClosed{{ end }}
               processingOptions:
                 requestHeaderMode: send
                 responseHeaderMode: send
@@ -66,6 +68,8 @@ stringData:
           conditional:
             - condition: 'request.method == "POST" && json(request.body).model in ["auto", "pinball"]'
               host: "pinball.{{ .Namespace }}.svc.cluster.local:9201"
+              # allow (fail-open) on purpose: Pinball only picks a model tier; if it is
+              # down the virtualModel falls back to its default target. No data-safety impact.
               failureMode: allow
               includeRequestBody: {maxRequestBytes: 16777216}
               includeRequestHeaders: [content-type, x-pinball-tier, x-pinball-min-tier, x-agw-caller]
@@ -87,11 +91,17 @@ stringData:
           params:
             baseUrl: http://copilot-api.{{ .Namespace }}.svc.cluster.local:4141/v1
             apiKey: dummy
-{{- else }}
+{{- end }}
+{{- if .UseOpenAI }}
         - name: openai-direct
           provider: openAI
           params:
+{{- if .OpenAIBaseURL }}
+            baseUrl: "{{ .OpenAIBaseURL }}"
+{{- end }}
             apiKey: "{{ .OpenAIKey }}"
+{{- end }}
+{{- if .UseAnthropic }}
         - name: anthropic-direct
           provider: anthropic
           params:
@@ -102,49 +112,18 @@ stringData:
           routing: &pinball_routing
             conditional:
               targets:
-                - {when: 'default(extauthz.model, "") == "claude-haiku-5.5"', model: pinball-claude-haiku-5.5}
-                - {when: 'default(extauthz.model, "") == "gemini-3.8-flash"', model: pinball-gemini-3.8-flash}
-                - {when: 'default(extauthz.model, "") == "claude-sonnet-5.5"', model: pinball-claude-sonnet-5.5}
-                - {when: 'default(extauthz.model, "") == "claude-opus-5.5"', model: pinball-claude-opus-5.5}
-                - {model: pinball-claude-sonnet-5.5}
+{{- range .Entries }}
+                - {when: 'default(extauthz.model, "") == "{{ .Name }}"', model: pinball-{{ .Name }}}
+{{- end }}
+                - {model: pinball-{{ .Fallback }}}
         - name: pinball
           routing: *pinball_routing
       models:
-        - name: pinball-claude-haiku-5.5
+{{- range .Entries }}
+        - name: pinball-{{ .Name }}
           visibility: internal
-{{- if eq .Provider "copilot" }}
-          provider: {reference: copilot-completions}
-          params: {model: claude-haiku-5.5}
-{{- else }}
-          provider: {reference: anthropic-direct}
-          params: {model: claude-3-5-haiku-latest}
-{{- end }}
-        - name: pinball-gemini-3.8-flash
-          visibility: internal
-{{- if eq .Provider "copilot" }}
-          provider: {reference: copilot-completions}
-          params: {model: gemini-3.8-flash}
-{{- else }}
-          provider: {reference: openai-direct}
-          params: {model: gpt-4o-mini}
-{{- end }}
-        - name: pinball-claude-sonnet-5.5
-          visibility: internal
-{{- if eq .Provider "copilot" }}
-          provider: {reference: copilot-completions}
-          params: {model: claude-sonnet-5.5}
-{{- else }}
-          provider: {reference: anthropic-direct}
-          params: {model: claude-3-5-sonnet-latest}
-{{- end }}
-        - name: pinball-claude-opus-5.5
-          visibility: internal
-{{- if eq .Provider "copilot" }}
-          provider: {reference: copilot-completions}
-          params: {model: claude-opus-5.5}
-{{- else }}
-          provider: {reference: anthropic-direct}
-          params: {model: claude-3-opus-latest}
+          provider: {reference: {{ .Ref }}}
+          params: {model: {{ .Upstream }}}
 {{- end }}
 ---
 apiVersion: v1
@@ -156,17 +135,16 @@ data:
   pinball.yaml: |
     # Schema of ghcr.io/jeefy/pinball:0.7.2 (heavy tier, thresholds, prompt_tokens).
     models:
-      claude-haiku-5.5: {prompt_tokens: 200000}
-      gemini-3.8-flash: {prompt_tokens: 1000000}
-      claude-sonnet-5.5: {prompt_tokens: 200000}
-      claude-opus-5.5: {prompt_tokens: 200000}
+{{- range .Entries }}
+      {{ .Name }}: {prompt_tokens: {{ .PromptTokens }}}
+{{- end }}
     tiers:
-      light: [claude-haiku-5.5]
-      standard: [gemini-3.8-flash, claude-sonnet-5.5]
-      heavy: [claude-opus-5.5]
+      light: [{{ .R.TierList "light" }}]
+      standard: [{{ .R.TierList "standard" }}]
+      heavy: [{{ .R.TierList "heavy" }}]
     thresholds:
-      standard: 1
-      heavy: 5
+      standard: {{ .R.Thresholds.Standard }}
+      heavy: {{ .R.Thresholds.Heavy }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -308,6 +286,9 @@ spec:
     - name: grpc
       port: 9101
       targetPort: 9101
+    - name: metrics
+      port: 9102
+      targetPort: 9102
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -4,25 +4,30 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"os"
 	"os/exec"
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/models"
 )
 
 //go:embed assets/*
 var k8sAssets embed.FS
 
 type ClusterOptions struct {
-	Namespace    string
-	Provider     string
-	CopilotToken string
-	OpenAIKey    string
-	AnthropicKey string
-	StandinSalt  string
-	OptimizerDSN string // when set, renders the optimizer CronJob + overlay PVC
-	OptSchedule  string
-	DryRun       bool
+	Namespace     string
+	Provider      string
+	CopilotToken  string
+	OpenAIKey     string
+	AnthropicKey  string
+	StandinSalt   string
+	OptimizerDSN  string // when set, renders the optimizer CronJob + overlay PVC
+	OptSchedule   string
+	FailOpen      bool   // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OpenAIBaseURL string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	ModelsFile    string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	DryRun        bool
 }
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
@@ -43,13 +48,31 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 		opts.OptSchedule = "0 3 * * 0" // weekly Sunday 03:00
 	}
 
+	var override *models.Overrides
+	if opts.ModelsFile != "" {
+		raw, err := os.ReadFile(opts.ModelsFile)
+		if err != nil {
+			return "", fmt.Errorf("reading models file: %w", err)
+		}
+		o, err := models.ParseOverrides(raw)
+		if err != nil {
+			return "", err
+		}
+		override = &o
+	}
+	res, err := models.Resolve(config.ProviderType(opts.Provider), override)
+	if err != nil {
+		return "", err
+	}
+	data := newTemplateData(opts, res)
+
 	tmpl, err := template.New("k8s").Parse(string(tmplData))
 	if err != nil {
 		return "", fmt.Errorf("parsing k8s template: %w", err)
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, opts); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("rendering k8s template: %w", err)
 	}
 	return buf.String(), nil

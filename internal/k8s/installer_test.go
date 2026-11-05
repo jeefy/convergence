@@ -3,10 +3,12 @@ package k8s
 import (
 	"errors"
 	"io"
-
-	"gopkg.in/yaml.v3"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestRenderManifestsCopilot(t *testing.T) {
@@ -52,8 +54,8 @@ func TestRenderManifestsDirect(t *testing.T) {
 	if strings.Contains(manifests, "name: convergence-copilot") {
 		t.Errorf("direct provider should not have copilot secret")
 	}
-	if !strings.Contains(manifests, "sk-test-direct") {
-		t.Errorf("manifests missing OpenAI key")
+	if !strings.Contains(manifests, "sk-ant-direct") {
+		t.Errorf("manifests missing Anthropic key (default direct mapping is anthropic)")
 	}
 }
 
@@ -127,4 +129,133 @@ func TestNoCommandOverridesEntrypoint(t *testing.T) {
 	if strings.Contains(out, `command: ["-f"`) {
 		t.Error("agentgateway must use args")
 	}
+}
+
+func cfgData(t *testing.T, opts *ClusterOptions) string {
+	t.Helper()
+	for _, d := range renderDocs(t, opts) {
+		if d["kind"] == "Secret" {
+			if sd, ok := d["stringData"].(map[string]any); ok {
+				if c, ok := sd["config.yaml"].(string); ok {
+					return c
+				}
+			}
+		}
+	}
+	t.Fatal("agentgateway config not found")
+	return ""
+}
+
+func TestStandInFailureModeDefaultsClosed(t *testing.T) {
+	closed := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"})
+	if !strings.Contains(closed, "failureMode: failClosed") || strings.Contains(closed, "failureMode: failOpen") {
+		t.Errorf("default must be failClosed:\n%s", closed)
+	}
+	open := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", FailOpen: true})
+	if !strings.Contains(open, "failureMode: failOpen") || strings.Contains(open, "failureMode: failClosed") {
+		t.Errorf("FailOpen must flip to failOpen")
+	}
+	if !strings.Contains(closed, "failureMode: allow") {
+		t.Errorf("pinball ext_authz must stay allow")
+	}
+}
+
+func TestMatrixNoSecretsInConfigMaps(t *testing.T) {
+	for _, prov := range []string{"copilot", "direct"} {
+		for _, dsn := range []string{"", "postgres://u:p@h/db"} {
+			for _, fo := range []bool{false, true} {
+				docs := renderDocs(t, &ClusterOptions{
+					Namespace: "x", Provider: prov, OptimizerDSN: dsn, FailOpen: fo,
+					CopilotToken: "SECRETCOPILOT", OpenAIKey: "SECRETOPENAI", AnthropicKey: "SECRETANTHROPIC",
+				})
+				for _, d := range docs {
+					if d["kind"] != "ConfigMap" {
+						continue
+					}
+					raw, _ := yaml.Marshal(d)
+					for _, s := range []string{"SECRETCOPILOT", "SECRETOPENAI", "SECRETANTHROPIC", "postgres://"} {
+						if strings.Contains(string(raw), s) {
+							t.Errorf("%s/%q/%v: ConfigMap contains %s", prov, dsn, fo, s)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestModelsFileOverrideAndErrors(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "m.yaml")
+	if err := os.WriteFile(good, []byte("direct:\n  claude-haiku-5.5: \"openai:my-mini\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: good, OpenAIKey: "k", AnthropicKey: "k"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "model: my-mini") || !strings.Contains(out, "name: openai-direct") || !strings.Contains(out, "name: anthropic-direct") {
+		t.Errorf("override not applied:\n%s", out)
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: filepath.Join(dir, "nope.yaml")}); err == nil {
+		t.Error("missing models file must error")
+	}
+	bad := filepath.Join(dir, "bad.yaml")
+	if err := os.WriteFile(bad, []byte("direct:\n  not-a-model: foo\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: bad}); err == nil {
+		t.Error("unknown pinball model must error")
+	}
+}
+
+func TestNoHardcodedModelNamesAndMappingSync(t *testing.T) {
+	tmpl, err := k8sAssets.ReadFile("assets/manifests.yaml.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"claude-", "gemini-", "gpt-"} {
+		if strings.Contains(string(tmpl), name) {
+			t.Errorf("template hardcodes model name %q", name)
+		}
+	}
+	out, _ := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	for _, n := range []string{"claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5"} {
+		if strings.Count(out, n) < 3 {
+			t.Errorf("%s should appear in pinball.yaml and gateway config", n)
+		}
+	}
+}
+
+func TestOpenAIBaseURL(t *testing.T) {
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: openaiModels(t), OpenAIBaseURL: "http://s:1/v1"})
+	if !strings.Contains(c, `baseUrl: "http://s:1/v1"`) {
+		t.Error("base url not rendered")
+	}
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: openaiModels(t)}), "baseUrl") {
+		t.Error("baseUrl must be absent by default")
+	}
+}
+
+func TestKubectlWrappersReportErrors(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	if err := ApplyManifests("a: b"); err == nil {
+		t.Error("apply without kubectl must error")
+	}
+	if err := DeleteManifests("a: b"); err == nil {
+		t.Error("delete without kubectl must error")
+	}
+	if err := DeleteNamespace("x"); err == nil {
+		t.Error("delete namespace without kubectl must error")
+	}
+}
+
+func openaiModels(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "m.yaml")
+	y := "direct:\n  claude-haiku-5.5: \"openai:a\"\n  claude-sonnet-5.5: \"openai:a\"\n  claude-opus-5.5: \"openai:a\"\n"
+	if err := os.WriteFile(p, []byte(y), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
