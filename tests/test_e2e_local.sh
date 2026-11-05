@@ -24,7 +24,22 @@ PODMAN_SVC_PID=""
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
+dump_diagnostics() { # best-effort container state and logs, so CI failures are diagnosable
+  [ -n "$CUR_ENGINE" ] || return 0
+  echo "==> DIAGNOSTICS ($CUR_ENGINE)" >&2
+  "$CUR_ENGINE" ps -a --format '{{.Names}}\t{{.Status}}' 2>&1 | head -20 >&2 || true
+  local c
+  for c in $("$CUR_ENGINE" ps -a --format '{{.Names}}' 2>/dev/null | grep '^convergence-' || true); do
+    echo "--- $c health:" >&2
+    "$CUR_ENGINE" inspect --format '{{json .State.Health}}' "$c" 2>&1 | cut -c1-1500 >&2 || true
+    echo "--- $c logs (tail):" >&2
+    "$CUR_ENGINE" logs --tail 25 "$c" 2>&1 | cut -c1-300 >&2 || true
+  done
+}
+
 cleanup() {
+  local rc=$?
+  [ "$rc" -eq 0 ] || dump_diagnostics
   if [ -n "$TEST_HOME" ]; then
     HOME="$TEST_HOME" "$BIN" stop >/dev/null 2>&1 || true
   fi
