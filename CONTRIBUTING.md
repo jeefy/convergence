@@ -9,11 +9,20 @@ You need Go (version in `go.mod`), make, and Docker or Podman with compose for t
 ```bash
 make build              # bin/convergence
 make test               # go test ./...
-make lint               # go vet
+make lint               # golangci-lint, go vet, gofmt check
 make test-e2e           # local compose stack, tests/test_e2e_local.sh
 make test-e2e-cluster   # Kubernetes, tests/test_e2e_cluster.sh
 bash tests/test_install.sh   # installer tests, offline
+go test -race -count=1 ./...   # what CI runs
 ```
+
+CI also runs `golangci-lint` (config in `.golangci.yml`) and prints a coverage summary. `make fmt` formats the tree.
+
+What the e2e tests do:
+
+- `tests/test_e2e_local.sh` brings up the real compose stack with the Ollama provider pointed at a stub upstream (`tests/stub-upstream/`), then sends real chat requests (plain and streaming) through the gateway.
+- `tests/test_e2e_cluster.sh` installs into a disposable cluster (KinD in CI), sends a real chat through the gateway, and then checks fail-closed behavior with Stand-In down.
+- `cluster install` has a hidden `--openai-base-url` flag (provider `direct`) that points the OpenAI backend at a stub or self-hosted endpoint. It's for tests only and isn't a supported user option.
 
 ## Layout
 
@@ -21,6 +30,9 @@ bash tests/test_install.sh   # installer tests, offline
 cmd/convergence/        main package
 internal/cli/           cobra commands
 internal/config/        ~/.convergence/config.yaml model and defaults
+internal/models/        tier to upstream model mapping and models.yaml overrides
+internal/doctor/        checks behind `convergence doctor`
+internal/health/        service probes behind `status`
 internal/templates/     compose, agentgateway and pinball templates (local mode)
 internal/k8s/           cluster manifests and installer
 internal/clientconfig/  per-client config writers with backup/restore

@@ -20,4 +20,4 @@ Only the latest release gets fixes before 1.0.
 
 ## Scope notes
 
-Some behavior is by design and documented in the README's security model: Stand-In is fail-open, scrubbing is pattern-based and won't catch everything, and credentials are stored in plaintext `0600` files under `~/.convergence`. Reports that show these protections failing beyond what's documented are in scope.
+Some behavior is by design and documented in the README's security model: Stand-In is fail-closed by default (fail-open is opt-in), the gateway has no authentication of its own, scrubbing is pattern-based and won't catch everything, and credentials are stored in plaintext `0600` files under `~/.convergence`. Reports that show these protections failing beyond what's documented are in scope.

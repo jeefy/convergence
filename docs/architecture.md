@@ -12,7 +12,7 @@ client ──► agentgateway :3000 /v1
              │
              │ 2. ext_authz            ──► Pinball :9201
              │      scores the sanitized prompt, sets the model tier
-             │      (light / standard / deep) and target model
+             │      (light / standard / heavy) and target model
              │
              │ 3. route to upstream
              │      copilot: copilot-api :4141 ──► GitHub Copilot
@@ -27,8 +27,8 @@ client ◄── response
 
 Failure behavior is set in the gateway config:
 
-- Stand-In ext_proc: `failureMode: failOpen`. If Stand-In is unreachable, requests continue **unscrubbed**.
-- Pinball ext_authz: `failureMode: allow`. If Pinball is unreachable, the request uses the model the client asked for.
+- Stand-In ext_proc: `failureMode: failClosed` by default. If Stand-In is unreachable, requests are rejected. `init --fail-open` (local) or `cluster install --fail-open` (cluster) switch it to `failOpen`, where requests continue **unscrubbed**.
+- Pinball ext_authz: `failureMode: allow`. If Pinball is unreachable, the request goes to the fallback target (the standard-tier model). Pinball only chooses a model, so this doesn't affect confidentiality.
 
 Anthropic Messages requests (`/v1/messages`) are translated by agentgateway, so Claude Code and OpenAI-style clients share the same endpoint.
 
@@ -55,7 +55,8 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 | `.env` | 0600 | Secrets injected into compose (`STANDIN_SALT`, API keys, Copilot token) |
 | `docker-compose.yaml` | 0600 | Rendered compose stack, no secrets |
 | `agentgateway.yaml` | 0600 | Rendered gateway config (listeners, ext_proc/ext_authz, backends) |
-| `pinball.yaml` | 0600 | Model catalog and tier assignments |
+| `pinball.yaml` | 0600 | Model catalog and tier assignments, generated from the model mapping |
+| `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
 | `logs/` | 0700 | Gateway access logs |
 
 `convergence uninstall --purge` deletes this directory.
@@ -70,9 +71,9 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 | Secret | `stand-in` | Stand-In salt |
 | Secret | `convergence-copilot` | Copilot token (copilot provider only) |
 | Secret | `agentgateway-config` | Rendered gateway config, including direct-provider API keys |
-| ConfigMap | `pinball-config` | Model catalog |
+| ConfigMap | `pinball-config` | Model catalog (honors `--models-file`) |
 | Deployment + Service | `agentgateway` | ports 3000 (http), 15020 (metrics) |
-| Deployment + Service | `stand-in` | ports 9101 (gRPC), 9102 (metrics) |
+| Deployment + Service | `stand-in` | ports 9101 (gRPC), 9102 (metrics, also exposed on the Service) |
 | Deployment + Service | `pinball` | port 9201 |
 | Deployment + Service | `copilot-api` | port 4141, copilot provider only |
 | Secret, PVC, CronJob | `pinball-optimizer-db`, `pinball-overlay`, `pinball-optimize` | only with `--optimizer-dsn`; schedule `0 3 * * 0` unless `--opt-schedule` is set |
@@ -90,3 +91,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0` |
 
 Tags are pinned, digests aren't yet.
+
+## Model mapping
+
+`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See the README's model mapping section.
