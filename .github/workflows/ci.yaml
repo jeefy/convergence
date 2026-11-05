@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  unit-test:
+    name: Unit & Shell Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,9 +16,26 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
-      - name: Run tests
+      - name: Run unit tests
         run: make test
-      - name: Shellcheck installer
+      - name: Test installer script
         run: bash -n install.sh && tests/test_install.sh
       - name: Build binary
         run: make build
+      - name: Cluster manifests dry-run validation
+        run: tests/test_e2e_cluster.sh
+
+  e2e-smoke:
+    name: Live Container Smoke Test
+    runs-on: ubuntu-latest
+    needs: unit-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      - name: Build binary
+        run: make build
+      - name: Run local live container smoke test
+        run: tests/test_e2e_local.sh
