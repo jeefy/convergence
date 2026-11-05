@@ -17,7 +17,7 @@ services:
       - copilot-api{{ end }}
 
   stand-in:
-    image: ghcr.io/jeefy/stand-in:v0.4.1
+    image: ghcr.io/jeefy/stand-in:0.4.1
     restart: unless-stopped
     environment:
       STANDIN_MODE: enforce
@@ -28,7 +28,7 @@ services:
       - "9102:9102"
 
   pinball:
-    image: ghcr.io/jeefy/pinball:v0.6.1
+    image: ghcr.io/jeefy/pinball:0.7.2
     restart: unless-stopped
     volumes:
       - ./pinball.yaml:/etc/pinball/pinball.yaml:ro

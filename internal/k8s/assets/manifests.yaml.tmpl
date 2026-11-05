@@ -207,7 +207,7 @@ spec:
     spec:
       containers:
         - name: stand-in
-          image: ghcr.io/jeefy/stand-in:v0.4.1
+          image: ghcr.io/jeefy/stand-in:0.4.1
           env:
             - name: STANDIN_MODE
               value: "enforce"
@@ -252,7 +252,7 @@ spec:
     spec:
       containers:
         - name: pinball
-          image: ghcr.io/jeefy/pinball:v0.6.1
+          image: ghcr.io/jeefy/pinball:0.7.2
           ports:
             - containerPort: 9201
               name: http
