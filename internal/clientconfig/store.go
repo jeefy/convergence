@@ -29,7 +29,7 @@ type manifest struct {
 	// Dirty: the file was edited by someone else between two of our runs, so the
 	// backup no longer describes the pre-Convergence state byte for byte.
 	Dirty bool   `json:"dirty,omitempty"`
-	Edits   []edit `json:"edits,omitempty"`
+	Edits []edit `json:"edits,omitempty"`
 }
 
 func sum(b []byte) string {
@@ -64,13 +64,13 @@ func writeAtomic(path string, data []byte, defMode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }() // best-effort temp cleanup (no-op after rename)
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close() // already failing
 		return err
 	}
 	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
+		_ = tmp.Close() // already failing
 		return err
 	}
 	if err := tmp.Close(); err != nil {

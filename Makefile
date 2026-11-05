@@ -6,7 +6,7 @@ LDFLAGS = -X github.com/jeefy/convergence/internal/version.Version=$(VERSION) \
           -X github.com/jeefy/convergence/internal/version.Commit=$(COMMIT) \
           -X github.com/jeefy/convergence/internal/version.Date=$(DATE)
 
-.PHONY: all build test test-e2e test-e2e-cluster lint clean
+.PHONY: all build test test-e2e test-e2e-cluster lint fmt clean
 
 all: build
 
@@ -24,7 +24,13 @@ test-e2e-cluster: build
 	./tests/test_e2e_cluster.sh
 
 lint:
+	golangci-lint run ./...
 	go vet ./...
+	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
+
+fmt:
+	gofmt -w .
+	golangci-lint fmt ./...
 
 clean:
 	rm -rf bin dist

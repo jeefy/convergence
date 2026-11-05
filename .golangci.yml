@@ -1,0 +1,42 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unconvert
+    - unused
+    - whitespace
+  settings:
+    gosec:
+      excludes:
+        # G204: exec of docker/podman/kubectl/helm with variable args is the
+        # purpose of the engine/cli packages; args are not shell-interpolated.
+        - G204
+        # G304: config/kubeconfig files are read from user-chosen paths by design.
+        - G304
+  exclusions:
+    presets:
+      - comments
+    rules:
+      # Deliberate modes: rendered/starter files hold no secrets and must be
+      # readable by containers (0o644); config dirs are 0o755 for the same reason.
+      - path: internal/(cli/models|templates/render|clientconfig/store)\.go
+        linters: [gosec]
+        text: "G30[12]"
+      # Test fixtures: permissions are irrelevant for temp files.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G30[126]"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -229,7 +229,7 @@ func TestListReportsPointed(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range sts {
-		if s.Client == "aider" && !(s.Present && s.Pointed) {
+		if s.Client == "aider" && (!s.Present || !s.Pointed) {
 			t.Errorf("aider status wrong: %+v", s)
 		}
 		if s.Client == "goose" && s.Present {

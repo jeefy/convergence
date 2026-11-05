@@ -16,9 +16,10 @@ func stripJSONC(b []byte) []byte {
 		c := out[i]
 		switch {
 		case inStr:
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++
-			} else if c == '"' {
+			case '"':
 				inStr = false
 			}
 		case c == '"':
@@ -31,7 +32,7 @@ func stripJSONC(b []byte) []byte {
 		case c == '/' && i+1 < len(out) && out[i+1] == '*':
 			out[i], out[i+1] = ' ', ' '
 			i += 2
-			for i+1 < len(out) && !(out[i] == '*' && out[i+1] == '/') {
+			for i+1 < len(out) && (out[i] != '*' || out[i+1] != '/') {
 				if out[i] != '\n' {
 					out[i] = ' '
 				}
@@ -47,16 +48,18 @@ func stripJSONC(b []byte) []byte {
 	for i := 0; i < len(out); i++ {
 		c := out[i]
 		if inStr {
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++
-			} else if c == '"' {
+			case '"':
 				inStr = false
 			}
 			continue
 		}
-		if c == '"' {
+		switch c {
+		case '"':
 			inStr = true
-		} else if c == ',' {
+		case ',':
 			j := i + 1
 			for j < len(out) && (out[j] == ' ' || out[j] == '\t' || out[j] == '\n' || out[j] == '\r') {
 				j++

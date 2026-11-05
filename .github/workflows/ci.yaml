@@ -16,8 +16,18 @@ jobs:
         with:
           go-version: '1.24'
           cache: true
-      - name: Run unit tests
-        run: make test
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11.3
+      - name: Vet and gofmt
+        run: make lint
+      - name: Run unit tests with race detector
+        run: go test -race -count=1 ./...
+      - name: Coverage summary
+        run: |
+          go test -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1
       - name: Test installer script
         run: bash -n install.sh && tests/test_install.sh
       - name: Build binary
@@ -41,6 +51,7 @@ jobs:
   e2e-kind:
     name: Live Cluster Smoke Test (KinD)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: unit-test
     steps:
       - uses: actions/checkout@v4
@@ -54,5 +65,5 @@ jobs:
           cluster_name: kind-convergence
       - name: Build binary
         run: make build
-      - name: Run cluster KinD live deployment test
+      - name: Run cluster KinD live deployment test (real chat request, scrub/restore, fail-closed)
         run: tests/test_e2e_cluster.sh

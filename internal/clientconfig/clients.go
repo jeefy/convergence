@@ -119,8 +119,10 @@ var clients = []client{
 				{path: []string{"OPENAI_BASE_PATH"}, val: "v1/chat/completions"},
 			}
 		},
-		pointed: func(d map[string]any) bool { return lookupString(d, "OPENAI_BASE_PATH") != "" && lookupString(d, "OPENAI_HOST") != "" },
-		note:    "Goose does not read API keys from config.yaml: export OPENAI_API_KEY=convergence (or store it via `goose configure`).",
+		pointed: func(d map[string]any) bool {
+			return lookupString(d, "OPENAI_BASE_PATH") != "" && lookupString(d, "OPENAI_HOST") != ""
+		},
+		note: "Goose does not read API keys from config.yaml: export OPENAI_API_KEY=convergence (or store it via `goose configure`).",
 	},
 	{
 		name:   "hermes",
