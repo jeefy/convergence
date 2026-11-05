@@ -63,6 +63,11 @@ type Config struct {
 	OllamaModelLight    string `yaml:"ollama_model_light,omitempty"`
 	OllamaModelStandard string `yaml:"ollama_model_standard,omitempty"`
 	OllamaModelHeavy    string `yaml:"ollama_model_heavy,omitempty"`
+
+	ImageAgentGateway string `yaml:"image_agentgateway,omitempty"`
+	ImageStandIn      string `yaml:"image_standin,omitempty"`
+	ImagePinball      string `yaml:"image_pinball,omitempty"`
+	ImageCopilotAPI   string `yaml:"image_copilot_api,omitempty"`
 }
 
 // NamedPort is a host port the stack publishes, with the service that owns it.

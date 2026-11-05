@@ -29,19 +29,27 @@ var clusterInstallCmd = &cobra.Command{
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		imgAGW, _ := cmd.Flags().GetString("image-agentgateway")
+		imgStandIn, _ := cmd.Flags().GetString("image-standin")
+		imgPinball, _ := cmd.Flags().GetString("image-pinball")
+		imgCopilot, _ := cmd.Flags().GetString("image-copilot-api")
 
 		opts := &k8s.ClusterOptions{
-			Namespace:     ns,
-			Provider:      prov,
-			CopilotToken:  copilotTok,
-			OpenAIKey:     openaiKey,
-			AnthropicKey:  anthropicKey,
-			OptSchedule:   optSchedule,
-			OptimizerDSN:  optDSN,
-			FailOpen:      failOpen,
-			OpenAIBaseURL: openaiBase,
-			ModelsFile:    modelsFile,
-			DryRun:        dryRun,
+			Namespace:         ns,
+			Provider:          prov,
+			CopilotToken:      copilotTok,
+			OpenAIKey:         openaiKey,
+			AnthropicKey:      anthropicKey,
+			OptSchedule:       optSchedule,
+			OptimizerDSN:      optDSN,
+			FailOpen:          failOpen,
+			OpenAIBaseURL:     openaiBase,
+			ModelsFile:        modelsFile,
+			DryRun:            dryRun,
+			ImageAgentGateway: imgAGW,
+			ImageStandIn:      imgStandIn,
+			ImagePinball:      imgPinball,
+			ImageCopilotAPI:   imgCopilot,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -111,6 +119,10 @@ func init() {
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
+	clusterInstallCmd.Flags().String("image-agentgateway", "", "Override agentgateway image (tag or digest)")
+	clusterInstallCmd.Flags().String("image-standin", "", "Override stand-in image (tag or digest)")
+	clusterInstallCmd.Flags().String("image-pinball", "", "Override pinball image (tag or digest)")
+	clusterInstallCmd.Flags().String("image-copilot-api", "", "Override copilot-api image (tag or digest)")
 
 	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
 

@@ -68,11 +68,31 @@ func VolumeSuffix() string {
 	return ""
 }
 
+func ResolveImages(cfg *config.Config) Images {
+	imgs := PinnedImages
+	if cfg == nil {
+		return imgs
+	}
+	if cfg.ImageAgentGateway != "" {
+		imgs.AgentGateway = cfg.ImageAgentGateway
+	}
+	if cfg.ImageStandIn != "" {
+		imgs.StandIn = cfg.ImageStandIn
+	}
+	if cfg.ImagePinball != "" {
+		imgs.Pinball = cfg.ImagePinball
+	}
+	if cfg.ImageCopilotAPI != "" {
+		imgs.CopilotAPI = cfg.ImageCopilotAPI
+	}
+	return imgs
+}
+
 func newContext(cfg *config.Config, res *models.Resolved) RenderContext {
 	return RenderContext{
 		Config: cfg,
 		Models: res,
-		Images: PinnedImages,
+		Images: ResolveImages(cfg),
 		Ports: HostPorts{
 			GatewayStats:   config.GatewayStatsPort,
 			StandinMetrics: config.StandinMetricsPort,

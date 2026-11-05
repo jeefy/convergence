@@ -224,3 +224,25 @@ func TestHealthcheckPythonHasNoWhitespace(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomImageOverrides(t *testing.T) {
+	customAGW := "ghcr.io/agentgateway/agentgateway:sha-1234567"
+	customStandIn := "ghcr.io/jeefy/stand-in:sha-abcdef"
+	customPinball := "ghcr.io/jeefy/pinball:dev"
+	customCopilot := "ghcr.io/ericc-ch/copilot-api:edge"
+
+	_, files := render(t, func(c *config.Config) {
+		c.Provider = config.ProviderCopilot
+		c.ImageAgentGateway = customAGW
+		c.ImageStandIn = customStandIn
+		c.ImagePinball = customPinball
+		c.ImageCopilotAPI = customCopilot
+	})
+
+	compose := files[ComposeFile]
+	for _, expected := range []string{customAGW, customStandIn, customPinball, customCopilot} {
+		if !strings.Contains(compose, expected) {
+			t.Errorf("compose file does not contain overridden image %s", expected)
+		}
+	}
+}

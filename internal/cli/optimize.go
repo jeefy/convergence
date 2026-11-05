@@ -56,7 +56,7 @@ reachable from a container (use host.docker.internal for services on this host).
 			"-e", "PINBALL_OPT_BUDGET_USD=10.0",
 			// Passed by name so the DSN is not visible in the process list.
 			"-e", "PINBALL_OPT_DB_DSN",
-			templates.PinnedImages.Pinball, "pinball-optimize",
+			templates.ResolveImages(s.cfg).Pinball, "pinball-optimize",
 		}
 		switch {
 		case checkRevert:

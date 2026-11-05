@@ -171,7 +171,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: agentgateway
-          image: cr.agentgateway.dev/agentgateway:v1.6.0
+          image: {{ .Images.AgentGateway }}
           # args (not command): command would replace the image ENTRYPOINT.
           args: ["--file", "/etc/agentgateway/config.yaml"]
           ports:
@@ -244,7 +244,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: stand-in
-          image: ghcr.io/jeefy/stand-in:0.4.1
+          image: {{ .Images.StandIn }}
           env:
             - name: STANDIN_MODE
               value: "enforce"
@@ -315,7 +315,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: pinball
-          image: ghcr.io/jeefy/pinball:0.7.3
+          image: {{ .Images.Pinball }}
           env:
             - name: PINBALL_CONFIG
               value: /etc/pinball/pinball.yaml
@@ -423,7 +423,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: optimize
-              image: ghcr.io/jeefy/pinball:0.7.3
+              image: {{ .Images.Pinball }}
               command: ["pinball-optimize", "run"]
               env:
                 - name: PINBALL_CONFIG
@@ -483,7 +483,7 @@ spec:
       containers:
         - name: copilot-api
           # v0.1.25 does not exist upstream; image runs as root so no runAsNonRoot.
-          image: ghcr.io/ericc-ch/copilot-api:v0.7.0
+          image: {{ .Images.CopilotAPI }}
           env:
             - name: GH_TOKEN
               valueFrom:

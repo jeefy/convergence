@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Component image overrides: `--image-agentgateway`, `--image-standin`, `--image-pinball`, and `--image-copilot-api` flags for `init` and `cluster install` (persisted in `config.yaml` for local compose), allowing deployment of specific image tags, dev SHAs, or custom registries.
+
 ### Fixed
 
 - Kubernetes mode: agentgateway is started with `--file` instead of `-f`; with `-f` v1.6.0 exits in-cluster (`configuration is required when running in Kubernetes`).

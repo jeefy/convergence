@@ -31,6 +31,11 @@ type initFlags struct {
 	ollamaLight  string
 	ollamaStd    string
 	ollamaHeavy  string
+
+	imageAGW        string
+	imageStandIn    string
+	imagePinball    string
+	imageCopilotAPI string
 }
 
 var initOpts initFlags
@@ -183,6 +188,19 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 			}
 		}
 	}
+
+	if f.imageAGW != "" {
+		cfg.ImageAgentGateway = f.imageAGW
+	}
+	if f.imageStandIn != "" {
+		cfg.ImageStandIn = f.imageStandIn
+	}
+	if f.imagePinball != "" {
+		cfg.ImagePinball = f.imagePinball
+	}
+	if f.imageCopilotAPI != "" {
+		cfg.ImageCopilotAPI = f.imageCopilotAPI
+	}
 	return nil
 }
 
@@ -274,5 +292,9 @@ func init() {
 	f.StringVar(&initOpts.ollamaHeavy, "ollama-model-heavy", "", "Ollama model for the heavy tier")
 	f.IntVar(&initOpts.port, "port", 0, "Host port for the gateway (default 3000)")
 	f.StringVar(&initOpts.bindAddress, "bind-address", "", "Host address to publish ports on (default 127.0.0.1; 0.0.0.0 exposes to the network)")
+	f.StringVar(&initOpts.imageAGW, "image-agentgateway", "", "Override agentgateway image (tag or digest)")
+	f.StringVar(&initOpts.imageStandIn, "image-standin", "", "Override stand-in image (tag or digest)")
+	f.StringVar(&initOpts.imagePinball, "image-pinball", "", "Override pinball image (tag or digest)")
+	f.StringVar(&initOpts.imageCopilotAPI, "image-copilot-api", "", "Override copilot-api image (tag or digest)")
 	rootCmd.AddCommand(initCmd)
 }

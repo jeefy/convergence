@@ -164,7 +164,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 | Command | Description |
 |---|---|
-| `init [--yes] [--provider P] [--engine docker\|podman] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
+| `init [--yes] [--provider P] [--engine docker\|podman] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
 | `login copilot` | GitHub device-flow login; stores the token for the Copilot provider. |
 | `start [--strict]` / `stop` / `restart` | Manage the local containers. `--strict` fails (instead of warning) when Ollama lacks a mapped model. |
 | `status [--json]` | Per service: container state and health probe; exits non-zero if a service is down. Prints a loud warning when Stand-In is down or fail-open. |
@@ -175,7 +175,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 | `config list` | List supported clients. |
 | `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
 | `config <client> restore [--force]` | Restore the client's backup. |
-| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run]` | Apply manifests to the current kube context. `--dry-run` prints them. |
+| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG]` | Apply manifests to the current kube context. `--dry-run` prints them. |
 | `cluster status [--namespace NS]` | Rollout and pod health. |
 | `cluster uninstall [--namespace NS] [--yes]` | Delete the Convergence resources. |
 | `optimize --db-dsn DSN [--dry-run]` | **Experimental.** Run a Pinball evaluation and within-tier re-ranking against a Pinball history database. |

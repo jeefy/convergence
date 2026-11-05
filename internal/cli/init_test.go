@@ -85,3 +85,21 @@ func TestResolveConfig_rejectsBadProvider(t *testing.T) {
 		t.Fatal("expected error for unknown provider")
 	}
 }
+
+func TestResolveConfig_imageOverrides(t *testing.T) {
+	cfg := config.DefaultConfig()
+	f := initFlags{
+		yes:          true,
+		provider:     "direct",
+		openAIKey:    "key",
+		imageAGW:     "custom/agw:sha-xyz",
+		imageStandIn: "custom/standin:dev",
+	}
+
+	if err := resolveConfig(cfg, f, newPrompter("", true)); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ImageAgentGateway != "custom/agw:sha-xyz" || cfg.ImageStandIn != "custom/standin:dev" {
+		t.Errorf("image overrides not set in config: %+v", *cfg)
+	}
+}

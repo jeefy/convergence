@@ -268,3 +268,30 @@ func TestAgentgatewayUsesLongFileFlag(t *testing.T) {
 		t.Error("agentgateway must be started with --file; with -f it exits: configuration is required when running in Kubernetes")
 	}
 }
+
+func TestClusterCustomImageOverrides(t *testing.T) {
+	customAGW := "ghcr.io/agentgateway/agentgateway:sha-mario4140"
+	customStandIn := "ghcr.io/jeefy/stand-in:v0.4.2-test"
+	customPinball := "ghcr.io/jeefy/pinball:dev-custom"
+	customCopilot := "ghcr.io/ericc-ch/copilot-api:edge-custom"
+
+	opts := &ClusterOptions{
+		Namespace:         "custom-ns",
+		Provider:          "copilot",
+		ImageAgentGateway: customAGW,
+		ImageStandIn:      customStandIn,
+		ImagePinball:      customPinball,
+		ImageCopilotAPI:   customCopilot,
+	}
+
+	manifests, err := RenderManifests(opts)
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+
+	for _, expected := range []string{customAGW, customStandIn, customPinball, customCopilot} {
+		if !strings.Contains(manifests, expected) {
+			t.Errorf("manifests do not contain overridden image %s", expected)
+		}
+	}
+}

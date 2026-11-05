@@ -28,6 +28,11 @@ type ClusterOptions struct {
 	OpenAIBaseURL string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
 	ModelsFile    string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
 	DryRun        bool
+
+	ImageAgentGateway string
+	ImageStandIn      string
+	ImagePinball      string
+	ImageCopilotAPI   string
 }
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
