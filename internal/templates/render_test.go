@@ -207,3 +207,20 @@ func TestComposeHasLoggingAndHealthDeps(t *testing.T) {
 		t.Errorf("healthy deps %d, want 3", n)
 	}
 }
+
+// Some podman versions split healthcheck CMD arguments on whitespace, turning
+// `python3 -c "import x; ..."` into a SyntaxError (seen on the CI runner:
+// containers stayed unhealthy). The inline python must contain no spaces.
+func TestHealthcheckPythonHasNoWhitespace(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	re := regexp.MustCompile(`"python3", "-c", "([^"]*)"`)
+	m := re.FindAllStringSubmatch(files[ComposeFile], -1)
+	if len(m) != 2 {
+		t.Fatalf("found %d python healthchecks, want 2", len(m))
+	}
+	for _, g := range m {
+		if strings.ContainsAny(g[1], " \t;") {
+			t.Errorf("healthcheck code must not contain whitespace or ';': %q", g[1])
+		}
+	}
+}
