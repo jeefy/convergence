@@ -11,16 +11,19 @@ Why: you get one endpoint for every agent, secrets scrubbed on the wire, and per
 
 ```
  Client (OpenCode, Claude Code, Aider, Goose, ...)
-          │ HTTP 127.0.0.1:3000 (/v1)
-          ▼
- ┌──────────────── agentgateway ────────────────┐
- │ 1. ext_proc ──► Stand-In   tokenize secrets  │
- │ 2. ext_authz ─► Pinball    choose model tier │
- │ 3. route ─────► upstream                     │
- │ 4. ext_proc ──► Stand-In   restore secrets   │
- └──────────────────────────────────────────────┘
-          │
-          ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ [Optional Sandbox: OpenShell / nono / sbx / k8s-agent] │
+ └───────────────────────────┬────────────────────────────┘
+                             │ HTTP 127.0.0.1:3000 (/v1)
+                             ▼
+ ┌─────────────────── agentgateway ───────────────────┐
+ │ 1. ext_proc ──► Stand-In   tokenize secrets        │
+ │ 2. ext_authz ─► Pinball    choose model tier       │
+ │ 3. route ─────► upstream                           │
+ │ 4. ext_proc ──► Stand-In   restore secrets         │
+ └───────────────────────────┬────────────────────────┘
+                             │
+                             ▼
  copilot-api :4141 (Copilot) │ OpenAI / Anthropic (direct) │ Ollama
 ```
 
@@ -65,7 +68,7 @@ make build            # produces bin/convergence
 
 ```bash
 convergence login copilot     # only for the Copilot provider
-convergence init              # pick engine and provider; writes ~/.convergence
+convergence init              # pick engine, provider, and optional sandbox; writes ~/.convergence
 convergence start
 convergence status
 convergence config opencode   # or claude-code, aider, goose, ...
@@ -76,6 +79,14 @@ Non-interactive:
 ```bash
 convergence init --yes --engine podman --provider direct \
   --openai-key "$OPENAI_API_KEY" --anthropic-key "$ANTHROPIC_API_KEY" --port 3000
+```
+
+With an isolated sandbox:
+
+```bash
+convergence init --yes --provider direct --sandbox nono
+convergence start
+convergence sandbox run opencode
 ```
 
 ### Kubernetes

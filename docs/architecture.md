@@ -5,24 +5,24 @@
 Every request to the gateway goes through the same four steps.
 
 ```
-client ──► agentgateway :3000 /v1
-             │
-             │ 1. ext_proc (request)  ──► Stand-In :9101 (gRPC)
-             │      secrets in the body are replaced with <<secret-...>> tokens
-             │
-             │ 2. ext_authz            ──► Pinball :9201
-             │      scores the sanitized prompt, sets the model tier
-             │      (light / standard / heavy) and target model
-             │
-             │ 3. route to upstream
-             │      copilot: copilot-api :4141 ──► GitHub Copilot
-             │      direct:  api.openai.com / api.anthropic.com
-             │      ollama:  Ollama (host.docker.internal:11434 by default)
-             │
-             │ 4. ext_proc (response) ──► Stand-In
-             │      tokens in the response are restored to the original values
-             ▼
-client ◄── response
+ [client / sandboxed agent] ──► agentgateway :3000 /v1
+                                  │
+                                  │ 1. ext_proc (request)  ──► Stand-In :9101 (gRPC)
+                                  │      secrets in the body are replaced with <<secret-...>> tokens
+                                  │
+                                  │ 2. ext_authz            ──► Pinball :9201
+                                  │      scores the sanitized prompt, sets the model tier
+                                  │      (light / standard / heavy) and target model
+                                  │
+                                  │ 3. route to upstream
+                                  │      copilot: copilot-api :4141 ──► GitHub Copilot
+                                  │      direct:  api.openai.com / api.anthropic.com
+                                  │      ollama:  Ollama (host.docker.internal:11434 by default)
+                                  │
+                                  │ 4. ext_proc (response) ──► Stand-In
+                                  │      tokens in the response are restored to the original values
+                                  ▼
+ [client / sandboxed agent] ◄── response
 ```
 
 Failure behavior is set in the gateway config:
@@ -46,8 +46,8 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 | Stand-In | 9102 | 9102 | Prometheus metrics |
 | Pinball | 9201 | 9201 | ext_authz and metrics |
 | copilot-api | 4141 | 4141 | Copilot upstream (copilot provider only) |
-| openshell | 17670 | 17670 | OpenShell gRPC/HTTP gateway (sandbox enabled only) |
-| openshell health | 17671 | 17671 | OpenShell health check (sandbox enabled only) |
+| openshell | 17670 | 17670 | OpenShell gRPC/HTTP gateway (openshell sandbox only) |
+| openshell health | 17671 | 17671 | OpenShell health check (openshell sandbox only) |
 
 ### Files under `~/.convergence`
 
