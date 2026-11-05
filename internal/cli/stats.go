@@ -30,7 +30,7 @@ var statsCmd = &cobra.Command{
 			st := telemetry.Collect(cmd.Context(), ep)
 			if statsJSON {
 				b, _ := json.MarshalIndent(st, "", "  ")
-				fmt.Fprintln(out, string(b))
+				_, _ = fmt.Fprintln(out, string(b))
 			} else {
 				telemetry.Print(st, out)
 			}
@@ -48,7 +48,7 @@ var statsCmd = &cobra.Command{
 		defer t.Stop()
 		for {
 			if !statsJSON {
-				fmt.Fprint(os.Stdout, "\033[H\033[2J")
+				_, _ = fmt.Fprint(os.Stdout, "\033[H\033[2J")
 			}
 			render()
 			select {

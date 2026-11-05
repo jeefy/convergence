@@ -55,17 +55,17 @@ func runClient(cmd *cobra.Command, name string, args []string, f configFlags) er
 	}
 	switch {
 	case !res.Changed:
-		fmt.Fprintf(out, "%s: already up to date (%s)\n", name, res.Path)
+		_, _ = fmt.Fprintf(out, "%s: already up to date (%s)\n", name, res.Path)
 	case o.DryRun:
-		fmt.Fprintf(out, "[dry-run] no files written\n%s", res.Diff)
+		_, _ = fmt.Fprintf(out, "[dry-run] no files written\n%s", res.Diff)
 	case restore:
-		fmt.Fprintf(out, "%s: restored %s\n", name, res.Path)
+		_, _ = fmt.Fprintf(out, "%s: restored %s\n", name, res.Path)
 	default:
-		fmt.Fprintf(out, "%s: configured %s -> %s\n", name, res.Path, clientconfig.Root(o.GatewayURL))
-		fmt.Fprintf(out, "Undo with: convergence config %s restore\n", name)
+		_, _ = fmt.Fprintf(out, "%s: configured %s -> %s\n", name, res.Path, clientconfig.Root(o.GatewayURL))
+		_, _ = fmt.Fprintf(out, "Undo with: convergence config %s restore\n", name)
 	}
 	if res.Note != "" && !restore {
-		fmt.Fprintln(out, res.Note)
+		_, _ = fmt.Fprintln(out, res.Note)
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func addClientCmd(name, short string, extra func(*cobra.Command, *configFlags), 
 			if err := runClient(cmd, name, args, f); err != nil {
 				return err
 			}
-			if post != nil && !(len(args) > 0) && !f.dryRun {
+			if post != nil && len(args) == 0 && !f.dryRun {
 				post(cmd)
 			}
 			return nil
@@ -109,7 +109,7 @@ var configListCmd = &cobra.Command{
 			if s.Present {
 				state = "present"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%-15s %-8s convergence=%-5t %s\n", s.Client, state, s.Pointed, s.Path)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%-15s %-8s convergence=%-5t %s\n", s.Client, state, s.Pointed, s.Path)
 		}
 		return nil
 	},
@@ -124,7 +124,7 @@ var configEnvCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprint(cmd.OutOrStdout(), clientconfig.EnvExports(o.GatewayURL))
+		_, _ = fmt.Fprint(cmd.OutOrStdout(), clientconfig.EnvExports(o.GatewayURL))
 		return nil
 	},
 }
@@ -137,7 +137,7 @@ func init() {
 		}, nil)
 	addClientCmd("oh-my-opencode", "Ensure the OpenCode `convergence` provider exists and print oh-my-opencode guidance",
 		nil, func(cmd *cobra.Command) {
-			fmt.Fprintln(cmd.OutOrStdout(), strings.TrimSpace(`
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), strings.TrimSpace(`
 oh-my-opencode reads models from OpenCode providers. omo.jsonc was not modified.
 To use Convergence, set the "model" of the agents/categories you want in your
 omo.jsonc to "convergence/auto" or "convergence/pinball".`))
