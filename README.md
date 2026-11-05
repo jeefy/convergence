@@ -4,7 +4,7 @@ Convergence runs an AI gateway stack on your workstation or in a Kubernetes clus
 
 - [agentgateway](https://agentgateway.dev/docs/) (`v1.6.0`): the gateway. It serves an OpenAI-compatible `/v1` endpoint (Anthropic Messages requests are translated) and forwards to your provider.
 - [Stand-In](https://github.com/jeefy/stand-in) (`0.4.1`): an `ext_proc` filter that swaps secrets and credentials in prompts for opaque tokens before they leave your machine, then puts the originals back in responses.
-- [Pinball](https://github.com/jeefy/pinball) (`0.7.2`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
+- [Pinball](https://github.com/jeefy/pinball) (`0.7.3`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
 
 Why: you get one endpoint for every agent, secrets scrubbed on the wire, and per-request model routing, without hand-writing gateway config.
 

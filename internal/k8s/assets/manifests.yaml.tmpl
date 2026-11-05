@@ -133,7 +133,7 @@ metadata:
   namespace: {{ .Namespace }}
 data:
   pinball.yaml: |
-    # Schema of ghcr.io/jeefy/pinball:0.7.2 (heavy tier, thresholds, prompt_tokens).
+    # Schema of ghcr.io/jeefy/pinball:0.7.3 (heavy tier, thresholds, prompt_tokens).
     models:
 {{- range .Entries }}
       {{ .Name }}: {prompt_tokens: {{ .PromptTokens }}}
@@ -315,7 +315,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: pinball
-          image: ghcr.io/jeefy/pinball:0.7.2
+          image: ghcr.io/jeefy/pinball:0.7.3
           env:
             - name: PINBALL_CONFIG
               value: /etc/pinball/pinball.yaml
@@ -423,7 +423,7 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           containers:
             - name: optimize
-              image: ghcr.io/jeefy/pinball:0.7.2
+              image: ghcr.io/jeefy/pinball:0.7.3
               command: ["pinball-optimize", "run"]
               env:
                 - name: PINBALL_CONFIG

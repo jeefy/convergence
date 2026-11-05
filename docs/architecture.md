@@ -87,7 +87,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 |---|---|
 | agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0` |
 | Stand-In | `ghcr.io/jeefy/stand-in:0.4.1` |
-| Pinball | `ghcr.io/jeefy/pinball:0.7.2` |
+| Pinball | `ghcr.io/jeefy/pinball:0.7.3` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0` |
 
 Tags are pinned, digests aren't yet.

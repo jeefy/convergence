@@ -8,7 +8,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- Local stack on Docker or Podman compose: agentgateway `v1.6.0`, Stand-In `0.4.1`, Pinball `0.7.2`, and copilot-api `v0.7.0` for the Copilot provider.
+- Local stack on Docker or Podman compose: agentgateway `v1.6.0`, Stand-In `0.4.1`, Pinball `0.7.3`, and copilot-api `v0.7.0` for the Copilot provider.
 - Providers: `copilot`, `direct` (OpenAI and Anthropic keys) and `ollama`.
 - `init` with interactive prompts or flags (`--yes`, `--provider`, `--engine`, `--copilot-token`, `--openai-key`, `--anthropic-key`, `--ollama-url`, `--ollama-model-light/-standard/-heavy`, `--bind-address`, `--port`, `--fail-open`).
 - `login copilot` (GitHub device flow).

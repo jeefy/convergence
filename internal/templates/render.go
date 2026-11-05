@@ -27,7 +27,7 @@ type Images struct {
 var PinnedImages = Images{
 	AgentGateway: "cr.agentgateway.dev/agentgateway:v1.6.0",
 	StandIn:      "ghcr.io/jeefy/stand-in:0.4.1",
-	Pinball:      "ghcr.io/jeefy/pinball:0.7.2",
+	Pinball:      "ghcr.io/jeefy/pinball:0.7.3",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
 	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0",
 }
