@@ -259,3 +259,12 @@ func openaiModels(t *testing.T) string {
 	}
 	return p
 }
+func TestAgentgatewayUsesLongFileFlag(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `args: ["--file", "/etc/agentgateway/config.yaml"]`) {
+		t.Error("agentgateway must be started with --file; with -f it exits: configuration is required when running in Kubernetes")
+	}
+}

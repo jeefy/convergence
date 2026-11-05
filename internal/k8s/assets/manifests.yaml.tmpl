@@ -173,7 +173,7 @@ spec:
         - name: agentgateway
           image: cr.agentgateway.dev/agentgateway:v1.6.0
           # args (not command): command would replace the image ENTRYPOINT.
-          args: ["-f", "/etc/agentgateway/config.yaml"]
+          args: ["--file", "/etc/agentgateway/config.yaml"]
           ports:
             - containerPort: 3000
               name: http
