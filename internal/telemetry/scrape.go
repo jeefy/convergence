@@ -33,7 +33,7 @@ func Scrape(ctx context.Context, client *http.Client, url string) ([]Sample, err
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-only response body
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)

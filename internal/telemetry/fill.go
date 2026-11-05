@@ -48,7 +48,7 @@ func fillPinball(st *Stats, s []Sample) {
 	p.ByModel = SumBy(s, "pinball_decisions_total", "model")
 }
 
-func line(w io.Writer, format string, a ...any) { fmt.Fprintf(w, format+"\n", a...) }
+func line(w io.Writer, format string, a ...any) { _, _ = fmt.Fprintf(w, format+"\n", a...) }
 
 func unavailable(w io.Writer, sec Section) {
 	line(w, "  unavailable (%s)", sec.Error)
