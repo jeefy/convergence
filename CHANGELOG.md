@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-05
+
 ### Added
 
 - Pluggable agent sandboxing runtime support (`internal/sandbox`): `none`, `openshell`, `nono`, `docker-sbx`, and `k8s-agent`.
@@ -56,6 +58,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/jeefy/convergence/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jeefy/convergence/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jeefy/convergence/releases/tag/v0.1.0
