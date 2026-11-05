@@ -1,10 +1,12 @@
 package templates
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -13,61 +15,130 @@ import (
 //go:embed assets/*
 var assetsFS embed.FS
 
-type RenderContext struct {
-	Config   *config.Config
-	DataDir  string
-	IsDocker bool
-	IsPodman bool
+// Images pinned by this binary. `convergence upgrade` re-renders with these.
+type Images struct {
+	AgentGateway string
+	StandIn      string
+	Pinball      string
+	CopilotAPI   string
 }
 
+var PinnedImages = Images{
+	AgentGateway: "cr.agentgateway.dev/agentgateway:v1.6.0",
+	StandIn:      "ghcr.io/jeefy/stand-in:0.4.1",
+	Pinball:      "ghcr.io/jeefy/pinball:0.7.2",
+	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
+	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0",
+}
+
+type HostPorts struct {
+	GatewayStats   int
+	StandinMetrics int
+	Pinball        int
+	CopilotAPI     int
+}
+
+type RenderContext struct {
+	Config *config.Config
+	Images Images
+	Ports  HostPorts
+	// VolumeSuffix adds a shared SELinux relabel on Linux so rootless podman
+	// (and docker on SELinux hosts) can read the bind-mounted configs.
+	VolumeSuffix string
+}
+
+// File names inside the config dir.
+const (
+	ComposeFile = "docker-compose.yaml"
+	EnvFile     = ".env"
+)
+
+// publicFiles hold no secrets and are bind-mounted into containers running
+// as other uids, so they must be world-readable.
+var publicFiles = []string{ComposeFile, "agentgateway.yaml", "pinball.yaml"}
+
+// VolumeSuffix is the bind-mount option suffix for this host.
+func VolumeSuffix() string {
+	if runtime.GOOS == "linux" {
+		return ",z"
+	}
+	return ""
+}
+
+func newContext(cfg *config.Config) RenderContext {
+	return RenderContext{
+		Config: cfg,
+		Images: PinnedImages,
+		Ports: HostPorts{
+			GatewayStats:   config.GatewayStatsPort,
+			StandinMetrics: config.StandinMetricsPort,
+			Pinball:        config.PinballPort,
+			CopilotAPI:     config.CopilotAPIPort,
+		},
+		VolumeSuffix: VolumeSuffix(),
+	}
+}
+
+// RenderAssets writes the compose stack into targetDir: non-secret files 0644
+// and the secret-bearing .env 0600 (read only by the compose CLI on the host).
 func RenderAssets(cfg *config.Config, targetDir string) error {
-	if err := os.MkdirAll(targetDir, 0700); err != nil {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return fmt.Errorf("creating target dir: %w", err)
 	}
-
-	ctx := RenderContext{
-		Config:   cfg,
-		DataDir:  targetDir,
-		IsDocker: cfg.Engine == "docker",
-		IsPodman: cfg.Engine == "podman",
+	// MkdirAll keeps the mode of an existing dir (older versions used 0700).
+	if err := os.Chmod(targetDir, 0o755); err != nil {
+		return fmt.Errorf("chmod target dir: %w", err)
 	}
 
-	files := []string{
-		"docker-compose.yaml",
-		"agentgateway.yaml",
-		"pinball.yaml",
-	}
-
-	for _, file := range files {
-		tmplPath := fmt.Sprintf("assets/%s.tmpl", file)
-		data, err := assetsFS.ReadFile(tmplPath)
+	ctx := newContext(cfg)
+	for _, file := range publicFiles {
+		data, err := assetsFS.ReadFile("assets/" + file + ".tmpl")
 		if err != nil {
-			return fmt.Errorf("reading template %s: %w", tmplPath, err)
+			return fmt.Errorf("reading template %s: %w", file, err)
 		}
-
-		tmpl, err := template.New(file).Parse(string(data))
+		tmpl, err := template.New(file).Option("missingkey=error").Parse(string(data))
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", file, err)
 		}
-
-		destPath := filepath.Join(targetDir, file)
-		f, err := os.OpenFile(destPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("opening dest %s: %w", destPath, err)
-		}
-
-		if err := tmpl.Execute(f, ctx); err != nil {
-			f.Close()
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, ctx); err != nil {
 			return fmt.Errorf("executing template %s: %w", file, err)
 		}
-		f.Close()
+		if err := writeFile(filepath.Join(targetDir, file), buf.Bytes(), 0o644); err != nil {
+			return err
+		}
 	}
+	return writeFile(filepath.Join(targetDir, EnvFile), RenderEnv(cfg), 0o600)
+}
 
-	// Create log directory for access.jsonl
-	logDir := filepath.Join(targetDir, "logs")
-	if err := os.MkdirAll(logDir, 0700); err != nil {
-		return fmt.Errorf("creating logs dir: %w", err)
+// RenderEnv returns the compose .env content carrying every secret.
+func RenderEnv(cfg *config.Config) []byte {
+	var b bytes.Buffer
+	b.WriteString("# Secrets for the convergence compose stack. Keep this file 0600.\n")
+	env := [][2]string{{"STANDIN_SALT", cfg.StandinSalt}}
+	switch cfg.Provider {
+	case config.ProviderCopilot:
+		env = append(env, [2]string{"GH_TOKEN", cfg.CopilotToken})
+	case config.ProviderDirect:
+		env = append(env,
+			[2]string{"OPENAI_API_KEY", cfg.OpenAIKey},
+			[2]string{"ANTHROPIC_API_KEY", cfg.AnthropicKey})
+	case config.ProviderOllama:
 	}
+	for _, kv := range env {
+		// Single quotes: compose takes the value literally (no $ expansion).
+		fmt.Fprintf(&b, "%s='%s'\n", kv[0], kv[1])
+	}
+	return b.Bytes()
+}
 
+// writeFile writes data and enforces perm even if the file already existed.
+func writeFile(path string, data []byte, perm os.FileMode) error {
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if err := os.Chmod(path, perm); err != nil {
+		return fmt.Errorf("chmod %s: %w", path, err)
+	}
 	return nil
 }

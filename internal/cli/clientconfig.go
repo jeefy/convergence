@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -14,239 +15,137 @@ var configCmd = &cobra.Command{
 	Short: "Configure or restore external client applications to use Convergence",
 }
 
-func getGatewayURL() (string, error) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return "", err
+type configFlags struct {
+	gatewayURL string
+	dryRun     bool
+	force      bool
+	setDefault bool
+}
+
+func (f configFlags) options() (clientconfig.Options, error) {
+	url := f.gatewayURL
+	if url == "" {
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			return clientconfig.Options{}, err
+		}
+		url = fmt.Sprintf("http://localhost:%d", cfg.GatewayPort)
 	}
-	return fmt.Sprintf("http://localhost:%d/v1", cfg.GatewayPort), nil
+	return clientconfig.Options{GatewayURL: url, SetDefault: f.setDefault, DryRun: f.dryRun, Force: f.force}, nil
 }
 
-var configOpenCodeCmd = &cobra.Command{
-	Use:   "opencode [restore]",
-	Short: "Point OpenCode to Convergence (or restore original endpoint)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureOpenCode("", true); err != nil {
+func runClient(cmd *cobra.Command, name string, args []string, f configFlags) error {
+	o, err := f.options()
+	if err != nil {
+		return err
+	}
+	out := cmd.OutOrStdout()
+	restore := len(args) > 0 && args[0] == "restore"
+	if len(args) > 0 && !restore {
+		return fmt.Errorf("unknown argument %q (expected: restore)", args[0])
+	}
+	var res clientconfig.Result
+	if restore {
+		res, err = clientconfig.Restore(name, o)
+	} else {
+		res, err = clientconfig.Configure(name, o)
+	}
+	if err != nil {
+		return err
+	}
+	switch {
+	case !res.Changed:
+		fmt.Fprintf(out, "%s: already up to date (%s)\n", name, res.Path)
+	case o.DryRun:
+		fmt.Fprintf(out, "[dry-run] no files written\n%s", res.Diff)
+	case restore:
+		fmt.Fprintf(out, "%s: restored %s\n", name, res.Path)
+	default:
+		fmt.Fprintf(out, "%s: configured %s -> %s\n", name, res.Path, clientconfig.Root(o.GatewayURL))
+		fmt.Fprintf(out, "Undo with: convergence config %s restore\n", name)
+	}
+	if res.Note != "" && !restore {
+		fmt.Fprintln(out, res.Note)
+	}
+	return nil
+}
+
+func addClientCmd(name, short string, extra func(*cobra.Command, *configFlags), post func(*cobra.Command)) {
+	var f configFlags
+	cmd := &cobra.Command{
+		Use:   name + " [restore]",
+		Short: short,
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := runClient(cmd, name, args, f); err != nil {
 				return err
 			}
-			fmt.Println("Successfully restored OpenCode configuration from backup.")
+			if post != nil && !(len(args) > 0) && !f.dryRun {
+				post(cmd)
+			}
 			return nil
-		}
+		},
+	}
+	cmd.Flags().StringVar(&f.gatewayURL, "gateway-url", "", "Gateway root URL (default http://localhost:<gateway_port>)")
+	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false, "Print the diff without writing anything")
+	cmd.Flags().BoolVar(&f.force, "force", false, "On restore, revert only Convergence keys even if the file changed since")
+	if extra != nil {
+		extra(cmd, &f)
+	}
+	configCmd.AddCommand(cmd)
+}
 
-		gwURL, err := getGatewayURL()
+var configListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Show every supported client, its config path and whether it points at Convergence",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sts, err := clientconfig.List()
 		if err != nil {
 			return err
 		}
-		if err := clientconfig.ConfigureOpenCode(gwURL, false); err != nil {
-			return err
+		for _, s := range sts {
+			state := "missing"
+			if s.Present {
+				state = "present"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%-15s %-8s convergence=%-5t %s\n", s.Client, state, s.Pointed, s.Path)
 		}
-		fmt.Printf("Successfully updated OpenCode provider endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to opencode.json.convergence.bak")
 		return nil
 	},
 }
 
-var configOmoCmd = &cobra.Command{
-	Use:   "oh-my-opencode [restore]",
-	Short: "Point oh-my-opencode agent profiles to Convergence (or restore original)",
+var configEnvCmd = &cobra.Command{
+	Use:     "copilot",
+	Aliases: []string{"env"},
+	Short:   "Print shell exports for OpenAI/Anthropic-style tools (Cursor has no file-based override; use these or its UI)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureOmo(true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored oh-my-opencode profile from backup.")
-			return nil
-		}
-
-		if err := clientconfig.ConfigureOmo(false); err != nil {
-			return err
-		}
-		fmt.Println("Successfully configured oh-my-opencode agent profile for Pinball.")
-		return nil
-	},
-}
-
-var configClaudeCodeCmd = &cobra.Command{
-	Use:   "claude-code [restore]",
-	Short: "Point Claude Code (~/.claude/settings.json) to Convergence (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureClaudeCode("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Claude Code settings from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
+		o, err := configFlags{}.options()
 		if err != nil {
 			return err
 		}
-		if err := clientconfig.ConfigureClaudeCode(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully updated Claude Code Anthropic endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to settings.json.convergence.bak")
-		return nil
-	},
-}
-
-var configAiderCmd = &cobra.Command{
-	Use:   "aider [restore]",
-	Short: "Point Aider (~/.aider.conf.yml) to Convergence (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureAider("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Aider configuration from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		if err := clientconfig.ConfigureAider(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully updated Aider OpenAI endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to .aider.conf.yml.convergence.bak")
-		return nil
-	},
-}
-
-var configHermesCmd = &cobra.Command{
-	Use:   "hermes [restore]",
-	Short: "Point Hermes (~/.hermes/config.yaml) to Convergence (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureHermes("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Hermes configuration from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		if err := clientconfig.ConfigureHermes(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully updated Hermes endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to config.yaml.convergence.bak")
-		return nil
-	},
-}
-
-var configGooseCmd = &cobra.Command{
-	Use:   "goose [restore]",
-	Short: "Point Goose (~/.config/goose/config.yaml) to Convergence (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureGoose("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Goose configuration from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		if err := clientconfig.ConfigureGoose(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully updated Goose OpenAI endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to config.yaml.convergence.bak")
-		return nil
-	},
-}
-
-var configCursorCmd = &cobra.Command{
-	Use:   "cursor [restore]",
-	Short: "Point Cursor settings to Convergence (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureCursor("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Cursor settings from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		if err := clientconfig.ConfigureCursor(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully updated Cursor OpenAI endpoint to: %s\n", gwURL)
-		fmt.Println("Backup saved to settings.json.convergence.bak")
-		return nil
-	},
-}
-
-var configContinueCmd = &cobra.Command{
-	Use:   "continue [restore]",
-	Short: "Add Convergence to Continue.dev (~/.continue/config.json) (or restore original)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		restore := len(args) > 0 && args[0] == "restore"
-		if restore {
-			if err := clientconfig.ConfigureContinue("", true); err != nil {
-				return err
-			}
-			fmt.Println("Successfully restored Continue.dev configuration from backup.")
-			return nil
-		}
-
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		if err := clientconfig.ConfigureContinue(gwURL, false); err != nil {
-			return err
-		}
-		fmt.Printf("Successfully added Convergence to Continue.dev models pointing to: %s\n", gwURL)
-		fmt.Println("Backup saved to config.json.convergence.bak")
-		return nil
-	},
-}
-
-var configCopilotCmd = &cobra.Command{
-	Use:   "copilot",
-	Short: "Print environment variables to point Copilot/OpenAI tools to Convergence",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		gwURL, err := getGatewayURL()
-		if err != nil {
-			return err
-		}
-		fmt.Println(clientconfig.PrintCopilotEnv(gwURL))
+		fmt.Fprint(cmd.OutOrStdout(), clientconfig.EnvExports(o.GatewayURL))
 		return nil
 	},
 }
 
 func init() {
-	configCmd.AddCommand(configOpenCodeCmd)
-	configCmd.AddCommand(configOmoCmd)
-	configCmd.AddCommand(configClaudeCodeCmd)
-	configCmd.AddCommand(configAiderCmd)
-	configCmd.AddCommand(configHermesCmd)
-	configCmd.AddCommand(configGooseCmd)
-	configCmd.AddCommand(configCursorCmd)
-	configCmd.AddCommand(configContinueCmd)
-	configCmd.AddCommand(configCopilotCmd)
+	configCmd.AddCommand(configListCmd, configEnvCmd)
+	addClientCmd("opencode", "Add a `convergence` provider to opencode.json (other keys untouched)",
+		func(c *cobra.Command, f *configFlags) {
+			c.Flags().BoolVar(&f.setDefault, "set-default", false, "Also set the default model to convergence/auto")
+		}, nil)
+	addClientCmd("oh-my-opencode", "Ensure the OpenCode `convergence` provider exists and print oh-my-opencode guidance",
+		nil, func(cmd *cobra.Command) {
+			fmt.Fprintln(cmd.OutOrStdout(), strings.TrimSpace(`
+oh-my-opencode reads models from OpenCode providers. omo.jsonc was not modified.
+To use Convergence, set the "model" of the agents/categories you want in your
+omo.jsonc to "convergence/auto" or "convergence/pinball".`))
+		})
+	addClientCmd("claude-code", "Point Claude Code (~/.claude/settings.json env block) at Convergence", nil, nil)
+	addClientCmd("aider", "Point Aider (~/.aider.conf.yml) at Convergence", nil, nil)
+	addClientCmd("hermes", "Add a `convergence` provider to ~/.hermes/config.yaml", nil, nil)
+	addClientCmd("goose", "Point Goose (~/.config/goose/config.yaml) at Convergence", nil, nil)
+	addClientCmd("continue", "Add Convergence to Continue (~/.continue/config.yaml)", nil, nil)
 	rootCmd.AddCommand(configCmd)
 }

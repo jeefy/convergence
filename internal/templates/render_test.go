@@ -3,66 +3,139 @@ package templates
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
 )
 
-func TestRenderAssetsCopilot(t *testing.T) {
-	tempDir := t.TempDir()
+const (
+	salt         = "salt-0123456789abcdef"
+	copilotTok   = "gho_secretcopilot"
+	openAIKey    = "sk-secret-openai"
+	anthropicKey = "sk-ant-secret"
+)
+
+func render(t *testing.T, mutate func(*config.Config)) (string, map[string]string) {
+	t.Helper()
+	dir := t.TempDir()
 	cfg := config.DefaultConfig()
-	cfg.Provider = config.ProviderCopilot
-	cfg.CopilotToken = "test-token"
+	cfg.StandinSalt = salt
+	cfg.CopilotToken = copilotTok
+	cfg.OpenAIKey = openAIKey
+	cfg.AnthropicKey = anthropicKey
+	mutate(cfg)
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatalf("RenderAssets: %v", err)
+	}
+	files := map[string]string{}
+	for _, f := range append(publicFiles, EnvFile) {
+		b, err := os.ReadFile(filepath.Join(dir, f))
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		files[f] = string(b)
+	}
+	return dir, files
+}
 
-	if err := RenderAssets(cfg, tempDir); err != nil {
-		t.Fatalf("RenderAssets failed: %v", err)
-	}
+func TestRenderAllProvidersAndEngines(t *testing.T) {
+	for _, engine := range []string{"docker", "podman"} {
+		for _, prov := range []config.ProviderType{config.ProviderCopilot, config.ProviderDirect, config.ProviderOllama} {
+			t.Run(engine+"/"+string(prov), func(t *testing.T) {
+				dir, files := render(t, func(c *config.Config) { c.Engine = engine; c.Provider = prov })
 
-	composeData, err := os.ReadFile(filepath.Join(tempDir, "docker-compose.yaml"))
-	if err != nil {
-		t.Fatalf("read docker-compose: %v", err)
-	}
-	if !strings.Contains(string(composeData), "copilot-api") {
-		t.Errorf("expected docker-compose to contain copilot-api")
-	}
+				for _, f := range publicFiles {
+					for _, secret := range []string{salt, copilotTok, openAIKey, anthropicKey} {
+						if strings.Contains(files[f], secret) {
+							t.Errorf("%s leaks a secret", f)
+						}
+					}
+					assertPerm(t, filepath.Join(dir, f), 0o644)
+				}
+				assertPerm(t, filepath.Join(dir, EnvFile), 0o600)
+				assertPerm(t, dir, 0o755)
 
-	gwData, err := os.ReadFile(filepath.Join(tempDir, "agentgateway.yaml"))
-	if err != nil {
-		t.Fatalf("read agentgateway: %v", err)
-	}
-	if !strings.Contains(string(gwData), "stand-in:9101") {
-		t.Errorf("expected agentgateway.yaml to contain stand-in endpoint")
-	}
-	if !strings.Contains(string(gwData), "pinball:9201") {
-		t.Errorf("expected agentgateway.yaml to contain pinball check")
-	}
-
-	pinData, err := os.ReadFile(filepath.Join(tempDir, "pinball.yaml"))
-	if err != nil {
-		t.Fatalf("read pinball: %v", err)
-	}
-	if !strings.Contains(string(pinData), "claude-haiku-5.5") {
-		t.Errorf("expected pinball.yaml to contain models")
+				compose, env := files[ComposeFile], files[EnvFile]
+				if !strings.Contains(env, "STANDIN_SALT='"+salt+"'") {
+					t.Errorf(".env missing salt")
+				}
+				hasCopilot := strings.Contains(compose, "copilot-api:")
+				if hasCopilot != (prov == config.ProviderCopilot) {
+					t.Errorf("copilot-api service present=%v for provider %s", hasCopilot, prov)
+				}
+				if (prov == config.ProviderCopilot) != strings.Contains(env, "GH_TOKEN='"+copilotTok+"'") {
+					t.Errorf(".env GH_TOKEN presence wrong for %s", prov)
+				}
+				if (prov == config.ProviderDirect) != strings.Contains(env, "OPENAI_API_KEY='"+openAIKey+"'") {
+					t.Errorf(".env OPENAI_API_KEY presence wrong for %s", prov)
+				}
+				if prov == config.ProviderDirect && !strings.Contains(files["agentgateway.yaml"], `apiKey: "$ANTHROPIC_API_KEY"`) {
+					t.Errorf("agentgateway.yaml must reference keys via env")
+				}
+			})
+		}
 	}
 }
 
-func TestRenderAssetsDirect(t *testing.T) {
-	tempDir := t.TempDir()
-	cfg := config.DefaultConfig()
-	cfg.Provider = config.ProviderDirect
-	cfg.OpenAIKey = "sk-test"
-	cfg.AnthropicKey = "sk-ant-test"
-
-	if err := RenderAssets(cfg, tempDir); err != nil {
-		t.Fatalf("RenderAssets failed: %v", err)
+func TestRenderBindsLoopbackByDefault(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	for _, want := range []string{"127.0.0.1:3000:3000", "127.0.0.1:15020:15020", "127.0.0.1:9102:9102", "127.0.0.1:9201:9201", "127.0.0.1:4141:4141"} {
+		if !strings.Contains(files[ComposeFile], `"`+want+`"`) {
+			t.Errorf("compose missing port mapping %s", want)
+		}
 	}
+}
 
-	composeData, err := os.ReadFile(filepath.Join(tempDir, "docker-compose.yaml"))
+func TestRenderHonorsBindAddressAndPort(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.BindAddress = "0.0.0.0"; c.GatewayPort = 8080 })
+	if !strings.Contains(files[ComposeFile], `"0.0.0.0:8080:3000"`) {
+		t.Errorf("compose missing 0.0.0.0:8080:3000")
+	}
+	if strings.Contains(files[ComposeFile], "127.0.0.1:") {
+		t.Errorf("compose still binds loopback")
+	}
+}
+
+func TestRenderTightensExistingPerms(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "agentgateway.yaml"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, EnvFile), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenderAssets(config.DefaultConfig(), dir); err != nil {
+		t.Fatal(err)
+	}
+	assertPerm(t, dir, 0o755)
+	assertPerm(t, filepath.Join(dir, "agentgateway.yaml"), 0o644)
+	assertPerm(t, filepath.Join(dir, EnvFile), 0o600)
+}
+
+func assertPerm(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
 	if err != nil {
-		t.Fatalf("read docker-compose: %v", err)
+		t.Fatal(err)
 	}
-	if strings.Contains(string(composeData), "copilot-api") {
-		t.Errorf("expected docker-compose to NOT contain copilot-api for direct provider")
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("%s: perm %o, want %o", filepath.Base(path), got, want)
+	}
+}
+
+// agentgateway expands $NAME anywhere in its config, comments included, and
+// fails on unset names: only the provider key variables may appear.
+func TestAgentgatewayOnlyReferencesProvidedEnv(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderDirect })
+	allowed := map[string]bool{"$OPENAI_API_KEY": true, "$ANTHROPIC_API_KEY": true}
+	for _, m := range regexp.MustCompile(`\$[A-Za-z_{][A-Za-z0-9_]*`).FindAllString(files["agentgateway.yaml"], -1) {
+		if !allowed[m] {
+			t.Errorf("unexpected env reference %s in agentgateway.yaml", m)
+		}
 	}
 }

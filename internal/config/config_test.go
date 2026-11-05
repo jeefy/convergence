@@ -14,35 +14,73 @@ func TestConfigRoundtrip(t *testing.T) {
 	cfg.Engine = "podman"
 	cfg.Provider = ProviderCopilot
 	cfg.CopilotToken = "test_token_123"
+	cfg.BindAddress = "0.0.0.0"
+	cfg.GatewayPort = 3333
 
 	if err := SaveConfig(cfg); err != nil {
 		t.Fatalf("SaveConfig failed: %v", err)
 	}
-
 	loaded, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
-
-	if loaded.Engine != "podman" {
-		t.Errorf("expected engine podman, got %s", loaded.Engine)
-	}
-	if loaded.Provider != ProviderCopilot {
-		t.Errorf("expected provider copilot, got %s", loaded.Provider)
-	}
-	if loaded.CopilotToken != "test_token_123" {
-		t.Errorf("expected token test_token_123, got %s", loaded.CopilotToken)
-	}
-	if len(loaded.StandinSalt) != 64 {
-		t.Errorf("expected 64 char hex salt, got length %d", len(loaded.StandinSalt))
+	if *loaded != *cfg {
+		t.Errorf("round-trip mismatch:\n got %+v\nwant %+v", *loaded, *cfg)
 	}
 
-	path := filepath.Join(tempHome, ".convergence", "config.yaml")
-	info, err := os.Stat(path)
+	info, err := os.Stat(filepath.Join(tempHome, ".convergence", "config.yaml"))
 	if err != nil {
 		t.Fatalf("stat failed: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
+	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Errorf("expected permissions 0600, got %o", perm)
+	}
+}
+
+func TestLoadConfigFillsDefaultsForOldConfig(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	dir := filepath.Join(tempHome, ".convergence")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("engine: docker\nprovider: direct\nstandin_salt: abc\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.BindAddress != DefaultBindAddress || loaded.GatewayPort != DefaultGatewayPort || loaded.StandinSalt != "abc" {
+		t.Errorf("unexpected defaults: %+v", *loaded)
+	}
+}
+
+func TestLoadConfigRejectsCorruptFile(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	dir := filepath.Join(tempHome, ".convergence")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("engine: [unterminated\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("expected parse error for corrupt config")
+	}
+}
+
+func TestPublishedPortsIncludesCopilotOnlyForCopilot(t *testing.T) {
+	cfg := DefaultConfig()
+	for _, p := range cfg.PublishedPorts() {
+		if p.Port == CopilotAPIPort {
+			t.Fatal("direct provider must not publish copilot port")
+		}
+	}
+	cfg.Provider = ProviderCopilot
+	ports := cfg.PublishedPorts()
+	if ports[len(ports)-1].Port != CopilotAPIPort {
+		t.Fatalf("copilot provider must publish %d, got %+v", CopilotAPIPort, ports)
 	}
 }

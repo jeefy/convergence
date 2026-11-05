@@ -20,13 +20,17 @@ type ClusterOptions struct {
 	OpenAIKey    string
 	AnthropicKey string
 	StandinSalt  string
-	UseBuiltinDB bool
-	DBDSN        string
+	OptimizerDSN string // when set, renders the optimizer CronJob + overlay PVC
 	OptSchedule  string
 	DryRun       bool
 }
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
+	switch opts.Provider {
+	case "copilot", "direct":
+	default:
+		return "", fmt.Errorf("unsupported provider %q: must be copilot or direct", opts.Provider)
+	}
 	tmplData, err := k8sAssets.ReadFile("assets/manifests.yaml.tmpl")
 	if err != nil {
 		return "", fmt.Errorf("reading k8s template: %w", err)
@@ -49,6 +53,15 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 		return "", fmt.Errorf("rendering k8s template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// DeleteNamespace removes the namespace (and everything in it) installed by RenderManifests.
+func DeleteNamespace(ns string) error {
+	out, err := exec.Command("kubectl", "delete", "namespace", ns, "--ignore-not-found=true").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("kubectl delete namespace failed: %w (output: %s)", err, string(out))
+	}
+	return nil
 }
 
 func ApplyManifests(manifests string) error {

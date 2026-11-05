@@ -1,41 +1,13 @@
+# Schema of ghcr.io/jeefy/pinball:0.7.2 (heavy tier, thresholds, prompt_tokens).
 models:
-  claude-haiku-5.5:
-    provider: copilot
-    tier: light
-    cost_per_m_in: 0.10
-    cost_per_m_out: 0.50
-
-  gemini-3.8-flash:
-    provider: copilot
-    tier: standard
-    cost_per_m_in: 0.75
-    cost_per_m_out: 3.75
-
-  claude-sonnet-5.5:
-    provider: copilot
-    tier: standard
-    cost_per_m_in: 2.00
-    cost_per_m_out: 10.00
-
-  claude-opus-5.5:
-    provider: copilot
-    tier: deep
-    cost_per_m_in: 4.00
-    cost_per_m_out: 20.00
-
+  claude-haiku-5.5: {prompt_tokens: 200000}
+  gemini-3.8-flash: {prompt_tokens: 1000000}
+  claude-sonnet-5.5: {prompt_tokens: 200000}
+  claude-opus-5.5: {prompt_tokens: 200000}
 tiers:
-  light:
-    models:
-      - claude-haiku-5.5
-  standard:
-    models:
-      - gemini-3.8-flash
-      - claude-sonnet-5.5
-  deep:
-    models:
-      - claude-opus-5.5
-
-scoring:
-  light_threshold: -1
-  standard_threshold: 1
-  deep_threshold: 5
+  light: [claude-haiku-5.5]
+  standard: [gemini-3.8-flash, claude-sonnet-5.5]
+  heavy: [claude-opus-5.5]
+thresholds:
+  standard: 1
+  heavy: 5

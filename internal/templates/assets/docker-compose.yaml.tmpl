@@ -1,14 +1,22 @@
+# Rendered by convergence. Contains NO secrets: they live in the 0600 .env file
+# next to this one and are injected via ${VAR} interpolation.
+name: convergence
+
 services:
   agentgateway:
-    image: cr.agentgateway.dev/agentgateway:v1.6.0
+    image: {{ .Images.AgentGateway }}
     command: ["-f", "/etc/agentgateway/agentgateway.yaml"]
     restart: unless-stopped
+{{- if eq .Config.Provider "direct" }}
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+{{- end }}
     ports:
-      - "{{ .Config.GatewayPort }}:3000"
-      - "15020:15020"
+      - "{{ .Config.BindAddress }}:{{ .Config.GatewayPort }}:3000"
+      - "{{ .Config.BindAddress }}:{{ .Ports.GatewayStats }}:15020"
     volumes:
-      - ./agentgateway.yaml:/etc/agentgateway/agentgateway.yaml:ro
-      - ./logs:/var/log/agentgateway:rw
+      - ./agentgateway.yaml:/etc/agentgateway/agentgateway.yaml:ro{{ .VolumeSuffix }}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -17,29 +25,37 @@ services:
       - copilot-api{{ end }}
 
   stand-in:
-    image: ghcr.io/jeefy/stand-in:0.4.1
+    image: {{ .Images.StandIn }}
     restart: unless-stopped
     environment:
       STANDIN_MODE: enforce
-      STANDIN_SALT: "{{ .Config.StandinSalt }}"
+      STANDIN_SALT: ${STANDIN_SALT:?STANDIN_SALT missing from .env; run convergence init}
       STANDIN_GRPC_PORT: "9101"
       STANDIN_METRICS_PORT: "9102"
     ports:
-      - "9102:9102"
+      - "{{ .Config.BindAddress }}:{{ .Ports.StandinMetrics }}:9102"
 
   pinball:
-    image: ghcr.io/jeefy/pinball:0.7.2
+    image: {{ .Images.Pinball }}
     restart: unless-stopped
     volumes:
-      - ./pinball.yaml:/etc/pinball/pinball.yaml:ro
+      - ./pinball.yaml:/etc/pinball/pinball.yaml:ro{{ .VolumeSuffix }}
     ports:
-      - "9201:9201"
-{{ if eq .Config.Provider "copilot" }}
+      - "{{ .Config.BindAddress }}:{{ .Ports.Pinball }}:9201"
+{{- if eq .Config.Provider "copilot" }}
+
   copilot-api:
-    image: ghcr.io/ericc-ch/copilot-api:v0.1.25
+    # ericc-ch/copilot-api: entrypoint runs `start -g "$GH_TOKEN"`; GH_TOKEN is a
+    # GitHub OAuth token from `convergence login copilot` (verified on v0.7.0).
+    image: {{ .Images.CopilotAPI }}
     restart: unless-stopped
     environment:
-      COPILOT_TOKEN: "{{ .Config.CopilotToken }}"
+      GH_TOKEN: ${GH_TOKEN:?GH_TOKEN missing from .env; run convergence login copilot}
+    volumes:
+      - copilot-data:/root/.local/share/copilot-api
     ports:
-      - "4141:4141"
-{{ end }}
+      - "{{ .Config.BindAddress }}:{{ .Ports.CopilotAPI }}:4141"
+
+volumes:
+  copilot-data:
+{{- end }}

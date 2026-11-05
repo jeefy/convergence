@@ -1,151 +1,184 @@
 # Convergence
 
-Convergence is a unified, local and in-cluster orchestration harness for **AgentGateway**, [**Stand-In**](https://github.com/jeefy/stand-in) (PII & credential scrubbing), and [**Pinball**](https://github.com/jeefy/pinball) (intelligent multi-tier model routing and optimization).
+Convergence runs an AI gateway stack on your workstation or in a Kubernetes cluster and points your coding agents at it. It wires together three projects:
 
-It exposes an OpenAI-compatible `/v1` endpoint on port `3000` (with automatic Anthropic Messages translation) that scrubs credentials on the wire and dynamically routes requests to the optimal model tier.
+- [agentgateway](https://agentgateway.dev/docs/) (`v1.6.0`): the gateway. It serves an OpenAI-compatible `/v1` endpoint (Anthropic Messages requests are translated) and forwards to your provider.
+- [Stand-In](https://github.com/jeefy/stand-in) (`0.4.1`): an `ext_proc` filter that swaps secrets and credentials in prompts for opaque tokens before they leave your machine, then puts the originals back in responses.
+- [Pinball](https://github.com/jeefy/pinball) (`0.7.2`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `deep`).
+
+Why: you get one endpoint for every agent, secrets scrubbed on the wire, and per-request model routing, without hand-writing gateway config.
 
 ```
-Client (OpenCode, Claude Code, Aider, Cursor)
-                     │ HTTP :3000
-                     ▼
-             AgentGateway v1.6
-              │             ▲
-   (ext_proc) │             │ (ext_authz)
-   Sanitize   ▼             ▼ Model Tier
-     [Stand-In]          [Pinball]
-    (Secret/PII)         (Scorer)
-   github.com/jeefy/   github.com/jeefy/
-       stand-in             pinball
-              │             ▲
-              └──────┬──────┘
-                     ▼ Upstream :4141 / Cloud
-          Copilot / Direct / Ollama
+ Client (OpenCode, Claude Code, Aider, Goose, ...)
+          │ HTTP 127.0.0.1:3000 (/v1)
+          ▼
+ ┌──────────────── agentgateway ────────────────┐
+ │ 1. ext_proc ──► Stand-In   tokenize secrets  │
+ │ 2. ext_authz ─► Pinball    choose model tier │
+ │ 3. route ─────► upstream                     │
+ │ 4. ext_proc ──► Stand-In   restore secrets   │
+ └──────────────────────────────────────────────┘
+          │
+          ▼
+ copilot-api :4141 (Copilot) │ OpenAI / Anthropic (direct) │ Ollama
 ```
 
----
+More detail, including ports and on-disk layout: [docs/architecture.md](docs/architecture.md).
 
-## Architecture & Ecosystem
+## Prerequisites
 
-Convergence weaves together:
-- **AgentGateway (`v1.6.0`)**: High-performance Envoy-based AI gateway providing provider translation, unified access logs, and rate/cost attribution.
-- [**jeefy/stand-in**](https://github.com/jeefy/stand-in) (`0.4.1`): Transparent Envoy `ext_proc` service that tokenizes API keys and sensitive tokens on ingress (`<<secret-...>>`) and reconstitutes them on egress.
-- [**jeefy/pinball**](https://github.com/jeefy/pinball) (`0.7.2`): Envoy `ext_authz` autopilot that inspects sanitized prompts and assigns optimal model tiers (`light`, `standard`, `deep`).
-- **Periodic Optimization & Judgement**: Pinball evaluates traffic patterns, replays historical requests across candidate models, and calculates within-tier re-rankings to continually minimize spend and latency. Defaults to a weekly evaluation schedule (`0 3 * * 0`, configurable).
+- Linux or macOS on amd64 or arm64. Windows isn't supported; WSL2 works.
+- For the local stack: Docker with the compose plugin, or Podman with `podman-compose` (or `podman compose`).
+- For the cluster mode: `kubectl` access to a cluster.
+- Credentials for one provider (see [Providers](#providers)).
 
----
-
-## Quickstart
-
-### Installation
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jeefy/convergence/main/install.sh | bash
 ```
 
-Or build from source:
+The installer:
+
+- downloads `convergence_<os>_<arch>.tar.gz` and `checksums.txt` from the GitHub release and refuses to install if the sha256 doesn't match;
+- installs to `/usr/local/bin` if writable, otherwise `~/.local/bin`. It never runs `sudo`;
+- checks for docker/podman with compose and prints guidance if missing.
+
+Options:
 
 ```bash
-git clone https://github.com/jeefy/convergence.git
-cd convergence
-make build
-sudo install -m 755 bin/convergence /usr/local/bin/
+CONVERGENCE_VERSION=v0.1.0 bash install.sh   # pin a release (default: latest)
+INSTALL_DIR=$HOME/bin bash install.sh        # choose the target directory
 ```
 
-### Local Setup
+From source (Go 1.24+):
 
 ```bash
-# Interactive setup (selects engine: docker/podman, and provider: copilot/direct/ollama)
-convergence init
+git clone https://github.com/jeefy/convergence.git && cd convergence
+make build            # produces bin/convergence
+```
 
-# Start the stack (AgentGateway, Stand-In, Pinball)
+## Quickstart
+
+### Local
+
+```bash
+convergence login copilot     # only for the Copilot provider
+convergence init              # pick engine and provider; writes ~/.convergence
 convergence start
-
-# Check health and view live stats
 convergence status
-convergence stats
-
-# Trigger Pinball usage evaluation & re-ranking check (dry-run or live)
-convergence optimize --dry-run
-
-# Stop the stack
-convergence stop
+convergence config opencode   # or claude-code, aider, goose, ...
 ```
 
----
-
-## Client Auto-Configuration
-
-Point your agentic harnesses and tools to Convergence with a single command. Each command creates an automatic backup (`.convergence.bak`) and supports clean rollback via `restore`.
+Non-interactive:
 
 ```bash
-# Developer CLIs
-convergence config opencode              # Point OpenCode (~/.config/opencode/opencode.json)
-convergence config opencode restore      # Restore original OpenCode config
-
-convergence config claude-code           # Point Claude Code (~/.claude/settings.json)
-convergence config claude-code restore   # Restore original Claude Code settings
-
-convergence config aider                 # Point Aider (~/.aider.conf.yml)
-convergence config aider restore         # Restore original Aider config
-
-convergence config oh-my-opencode        # Switch oh-my-opencode profile to Pinball
-convergence config oh-my-opencode restore
-
-convergence config goose                 # Point Goose (~/.config/goose/config.yaml)
-convergence config goose restore
-
-convergence config hermes                # Point Hermes Agent (~/.hermes/config.yaml)
-convergence config hermes restore
-
-# IDEs
-convergence config cursor                # Point Cursor OpenAI base URL
-convergence config cursor restore
-
-convergence config continue              # Add Convergence provider to Continue.dev
-convergence config continue restore
-
-# Shell Exports
-convergence config copilot               # Print OPENAI_* and ANTHROPIC_* exports
+convergence init --yes --engine podman --provider direct \
+  --openai-key "$OPENAI_API_KEY" --anthropic-key "$ANTHROPIC_API_KEY" --port 3000
 ```
 
----
-
-## Kubernetes Cluster Deployment
-
-Deploy Convergence directly into your Kubernetes cluster:
+### Kubernetes
 
 ```bash
-# Preview rendered manifests
-convergence cluster install --dry-run --namespace=convergence
-
-# Install to cluster
-convergence cluster install --namespace=convergence --provider=copilot
-
-# Check rollout status
-convergence cluster status --namespace=convergence
+convergence cluster install --namespace convergence --provider copilot --copilot-token "$GH_TOKEN"
+convergence cluster status --namespace convergence
+kubectl -n convergence port-forward svc/agentgateway 3000:3000
+convergence config opencode --gateway-url http://127.0.0.1:3000
 ```
 
----
+## Providers
 
-## CLI Reference
+| Provider | Upstream | Credentials |
+|---|---|---|
+| `copilot` | GitHub Copilot through [copilot-api](https://github.com/ericc-ch/copilot-api) (`v0.7.0`) on `:4141` | A GitHub account with an active Copilot subscription. Run `convergence login copilot` (device flow) or pass `--copilot-token`. |
+| `direct` | OpenAI and Anthropic APIs | `--openai-key` from <https://platform.openai.com/api-keys>, `--anthropic-key` from <https://console.anthropic.com/settings/keys>. Either or both. |
+| `ollama` | A local Ollama server | No key. `--ollama-url` defaults to `http://host.docker.internal:11434`. Local mode only. |
+
+Cluster mode supports `copilot` and `direct`.
+
+## Client configuration
+
+`convergence config <client>` edits the client's config to use the gateway. It writes a `.convergence.bak` backup first. `restore` puts the backup back; `--force` restores even if the file changed since. `--dry-run` prints the change without writing. `--gateway-url` overrides the default `http://127.0.0.1:<port>`.
+
+| Client | Command | File changed |
+|---|---|---|
+| OpenCode | `convergence config opencode` | `~/.config/opencode/opencode.json` |
+| oh-my-opencode | `convergence config oh-my-opencode` | `~/.omo/omo.jsonc` |
+| Claude Code | `convergence config claude-code` | `~/.claude/settings.json` |
+| Aider | `convergence config aider` | `~/.aider.conf.yml` |
+| Goose | `convergence config goose` | `~/.config/goose/config.yaml` |
+| Hermes Agent | `convergence config hermes` | `~/.hermes/config.yaml` |
+| Continue | `convergence config continue` | `~/.continue/config.json` |
+| Anything else | `convergence config copilot` | Nothing. Prints `OPENAI_*` / `ANTHROPIC_*` exports to `eval` in your shell. |
+
+`convergence config list` shows the supported clients and whether each is currently pointed at Convergence.
+
+## CLI reference
 
 | Command | Description |
 |---|---|
-| `convergence init` | Run interactive or flag-based configuration |
-| `convergence start` | Start containers (docker/podman compose) |
-| `convergence stop` | Stop and remove running containers |
-| `convergence restart` | Restart all Convergence containers |
-| `convergence status` | Show container health and listening ports |
-| `convergence logs [-f]` | Tail container logs |
-| `convergence stats` | Display request telemetry, token usage, and cost estimates |
-| `convergence optimize [--dry-run]` | Run Pinball model evaluation and within-tier re-ranking |
-| `convergence cluster install` | Deploy Convergence manifests to Kubernetes (includes weekly CronJob) |
-| `convergence cluster status` | Inspect in-cluster deployment health |
-| `convergence config <client> [restore]` | Configure or restore external client applications |
-| `convergence version` | Display version, commit, and build date |
+| `init [--yes] [--provider P] [--engine docker\|podman] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--port N]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
+| `login copilot` | GitHub device-flow login; stores the token for the Copilot provider. |
+| `start` / `stop` / `restart` | Manage the local containers. |
+| `status` | Container health and listening ports. |
+| `logs [-f] [service]` | Show (or follow) logs for all services or one of `agentgateway`, `stand-in`, `pinball`, `copilot-api`. |
+| `stats [--json] [--watch]` | Request counts, tokens, latency, tier decisions and redactions read from Prometheus metrics. |
+| `config list` | List supported clients. |
+| `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
+| `config <client> restore [--force]` | Restore the client's backup. |
+| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run]` | Apply manifests to the current kube context. `--dry-run` prints them. |
+| `cluster status [--namespace NS]` | Rollout and pod health. |
+| `cluster uninstall [--namespace NS] [--yes]` | Delete the Convergence resources. |
+| `optimize --db-dsn DSN [--dry-run]` | **Experimental.** Run a Pinball evaluation and within-tier re-ranking against a Pinball history database. |
+| `upgrade` | Pull the image versions pinned by this binary and recreate the stack. |
+| `uninstall [--purge] [--yes]` | Stop and remove the stack. `--purge` also deletes `~/.convergence`. |
+| `version` | Version, commit, build date. |
 
----
+## How stats work
+
+`convergence stats` scrapes the Prometheus endpoints exposed by agentgateway (`:15020`), Stand-In (`:9102`) and Pinball (`:9201`) and summarizes them. Counters reset when containers restart. It shows tokens and tier choices, not money: there are no cost estimates. `--json` prints machine-readable output; `--watch` refreshes.
+
+## Pinball optimizer
+
+Pinball can replay sampled historical requests against candidate models and re-rank models within a tier. In the cluster, `cluster install --optimizer-dsn ...` adds a CronJob that runs weekly by default (`0 3 * * 0`, Sundays 03:00; change with `--opt-schedule`). Without `--optimizer-dsn` there's no CronJob. Locally, `convergence optimize --db-dsn ...` runs it on demand. The optimizer is experimental and opt-in; replays make real model calls. See the [Pinball docs](https://github.com/jeefy/pinball).
+
+## Security model
+
+What Stand-In does:
+
+- Inspects request bodies on ingress and replaces detected secrets (API keys, tokens, credentials) with `<<secret-...>>` placeholders, then restores them in responses. Detection is pattern-based; tiers and rules are described in the [Stand-In README](https://github.com/jeefy/stand-in).
+
+What it does **not** do:
+
+- It won't catch every secret or any PII it has no rule for. Treat it as a safety net, not a guarantee.
+- It's configured **fail-open**: the gateway's ext_proc filter uses `failureMode: failOpen`, so if Stand-In is down or errors, requests go upstream **unscrubbed**. Pinball also uses `failureMode: allow`, so routing falls back to the requested model. Check `convergence status` if you rely on scrubbing.
+- It doesn't protect the upstream response itself or anything you send through other paths.
+
+Local exposure:
+
+- All published ports bind to `127.0.0.1` by default (`bind_address` in `~/.convergence/config.yaml`). Change it only if you mean to expose the gateway, which has no authentication of its own.
+- Provider keys and tokens are stored in plaintext in `~/.convergence/config.yaml` and `~/.convergence/.env`, both mode `0600`. Rendered compose and gateway files contain no secrets. In the cluster, keys live in Kubernetes Secrets.
+
+Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
+
+## Troubleshooting
+
+**Port already in use.** Another process has `3000` (or `4141`, `9102`, `9201`, `15020`). Find it with `ss -ltnp | grep 3000` (Linux) or `lsof -i :3000` (macOS). Re-run `convergence init --port 3100` for the gateway; the other ports are fixed.
+
+**Podman rootless permission errors.** Make sure the user socket is running (`systemctl --user enable --now podman.socket`) and that `podman-compose` or `podman compose` works on its own. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
+
+**Health check failing.** Run `convergence status`, then `convergence logs <service>`. Common causes: an image pull failed (check network/registry access), `STANDIN_SALT missing` (re-run `convergence init`), or a bad provider key (gateway logs show 401s from upstream).
+
+**Copilot auth.** `401`/`403` from `copilot-api` means the token is missing, expired, or the account has no Copilot subscription. Run `convergence login copilot` again, then `convergence restart`. `convergence logs copilot-api` shows the auth result.
+
+## Versioning and upgrades
+
+Convergence follows [Semantic Versioning](https://semver.org/). Before 1.0, minor releases may include breaking changes; they're called out in [CHANGELOG.md](CHANGELOG.md). Each release pins exact image tags for agentgateway, Stand-In, Pinball and copilot-api. To upgrade, install the new binary (re-run the installer) and then run `convergence upgrade`. Image tags aren't digest-pinned yet.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-Apache-2.0
+Apache-2.0. See [LICENSE](LICENSE).

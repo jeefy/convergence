@@ -1,3 +1,6 @@
+# Rendered by convergence. Contains NO secrets: provider API keys are read by
+# agentgateway from its environment (env interpolation, verified against
+# agentgateway v1.6.0), which compose fills from the 0600 .env file.
 config:
   statsAddr: 0.0.0.0:15020
   connectionTerminationDeadline: 600s
@@ -61,11 +64,11 @@ llm:
     - name: openai-direct
       provider: openAI
       params:
-        apiKey: "{{ .Config.OpenAIKey }}"
+        apiKey: "$OPENAI_API_KEY"
     - name: anthropic-direct
       provider: anthropic
       params:
-        apiKey: "{{ .Config.AnthropicKey }}"
+        apiKey: "$ANTHROPIC_API_KEY"
 {{- end }}
 
   virtualModels:

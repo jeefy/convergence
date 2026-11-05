@@ -13,6 +13,8 @@ var rootCmd = &cobra.Command{
 	Short: "Convergence: Turnkey AI Gateway, Secret Stripping & Pinball Autopilot",
 	Long: `Convergence orchestrates AgentGateway, Stand-In secret tokenization,
 and Pinball autopilot routing into a unified, zero-friction AI gateway.`,
+	// Runtime errors are not usage errors: print the error, not the help text.
+	SilenceUsage: true,
 }
 
 func init() {

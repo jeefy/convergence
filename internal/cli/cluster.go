@@ -24,6 +24,7 @@ var clusterInstallCmd = &cobra.Command{
 		openaiKey, _ := cmd.Flags().GetString("openai-key")
 		anthropicKey, _ := cmd.Flags().GetString("anthropic-key")
 		optSchedule, _ := cmd.Flags().GetString("opt-schedule")
+		optDSN, _ := cmd.Flags().GetString("optimizer-dsn")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 		opts := &k8s.ClusterOptions{
@@ -33,6 +34,7 @@ var clusterInstallCmd = &cobra.Command{
 			OpenAIKey:    openaiKey,
 			AnthropicKey: anthropicKey,
 			OptSchedule:  optSchedule,
+			OptimizerDSN: optDSN,
 			DryRun:       dryRun,
 		}
 
@@ -52,6 +54,24 @@ var clusterInstallCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Successfully deployed Convergence to cluster in namespace '%s'!\n", ns)
+		return nil
+	},
+}
+
+var clusterUninstallCmd = &cobra.Command{
+	Use:   "uninstall",
+	Short: "Remove Convergence (the whole namespace) from the cluster",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ns, _ := cmd.Flags().GetString("namespace")
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			fmt.Printf("This deletes namespace '%s' and everything in it. Re-run with --yes to confirm.\n", ns)
+			return fmt.Errorf("confirmation required")
+		}
+		if err := k8s.DeleteNamespace(ns); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted namespace '%s'.\n", ns)
 		return nil
 	},
 }
@@ -79,11 +99,16 @@ func init() {
 	clusterInstallCmd.Flags().String("openai-key", "", "OpenAI API key")
 	clusterInstallCmd.Flags().String("anthropic-key", "", "Anthropic API key")
 	clusterInstallCmd.Flags().String("opt-schedule", "0 3 * * 0", "Cron schedule for pinball optimizer evaluation checks (default: weekly Sunday 03:00)")
+	clusterInstallCmd.Flags().String("optimizer-dsn", "", "Read-only Postgres DSN for the gateway request_logs; enables the pinball optimizer CronJob (stored in Secret pinball-optimizer-db)")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 
 	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
 
+	clusterUninstallCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
+	clusterUninstallCmd.Flags().Bool("yes", false, "Confirm deletion")
+
 	clusterCmd.AddCommand(clusterInstallCmd)
+	clusterCmd.AddCommand(clusterUninstallCmd)
 	clusterCmd.AddCommand(clusterStatusCmd)
 	rootCmd.AddCommand(clusterCmd)
 }

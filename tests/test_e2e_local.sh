@@ -1,95 +1,174 @@
 #!/usr/bin/env bash
-# tests/test_e2e_local.sh - End-to-End Local Smoke Test for Convergence
+# tests/test_e2e_local.sh - E2E: real requests through AgentGateway -> Stand-In -> Pinball -> stub upstream.
+# Runs once per available engine (docker, podman). Override with ENGINES="docker".
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BIN="${ROOT_DIR}/bin/convergence"
+STUB_PY="${SCRIPT_DIR}/stub-upstream/stub.py"
+STUB_IMAGE="${STUB_IMAGE:-docker.io/library/python:3.12-alpine}"
+AGW_IMAGE="cr.agentgateway.dev/agentgateway:v1.6.0"
+GW=3000; STANDIN=9102; PINBALL=9201; STATS=15020   # fixed by the compose template
 
-# Ensure binary exists
-if [ ! -x "$BIN" ]; then
-  echo "Building convergence binary..."
-  (cd "$ROOT_DIR" && make build)
-fi
+[ -x "$BIN" ] || { echo "Building convergence binary..."; (cd "$ROOT_DIR" && make build); }
 
-TEST_HOME="$(mktemp -d -t convergence-e2e-XXXXXX)"
-export HOME="$TEST_HOME"
+ORIG_HOME="$HOME"
+# keep container storage/config at the real location while HOME is sandboxed
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$ORIG_HOME/.local/share}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$ORIG_HOME/.config}"
+TEST_HOME=""
+STUB_NAME="convergence-e2e-stub-$$"
+CUR_ENGINE=""
+PODMAN_SVC_PID=""
+
+fail() { echo "ERROR: $*" >&2; exit 1; }
 
 cleanup() {
-  echo "==> Cleaning up test containers and temp directory..."
-  "$BIN" stop || true
-  rm -rf "$TEST_HOME"
+  if [ -n "$TEST_HOME" ]; then
+    HOME="$TEST_HOME" "$BIN" stop >/dev/null 2>&1 || true
+  fi
+  [ -n "$PODMAN_SVC_PID" ] && kill "$PODMAN_SVC_PID" >/dev/null 2>&1 || true
+  [ -n "$CUR_ENGINE" ] && "$CUR_ENGINE" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
+  [ -z "$TEST_HOME" ] || rm -rf "$TEST_HOME"
+  return 0
 }
 trap cleanup EXIT
 
-echo "==> Running 'convergence init' with mock Direct API keys..."
-"$BIN" init << 'EOF'
-2
-sk-ant-mock-key-for-testing
-sk-mock-key-for-testing
-EOF
+free_port() { python3 -c 'import socket;s=socket.socket();s.bind(("",0));print(s.getsockname()[1])'; }
 
-echo "==> Validating rendered AgentGateway configuration with container engine..."
-CONFIG_DIR="${TEST_HOME}/.convergence"
-chmod 755 "$CONFIG_DIR"
-chmod 644 "$CONFIG_DIR"/*.yaml
+metric() { # metric <port> <name> -> sum of all non-bucket series
+  curl -sf "http://127.0.0.1:$1/metrics" | awk -v n="$2" '$0 !~ /^#/ { split($1,a,"{"); if (a[1]==n) s+=$NF } END{printf "%d", s+0}'
+}
 
-ENGINE="docker"
-if ! command -v docker >/dev/null 2>&1 && command -v podman >/dev/null 2>&1; then
-  ENGINE="podman"
-fi
+wait_for() { # wait_for <desc> <tries> <cmd...>
+  local desc="$1" tries="$2"; shift 2
+  for _ in $(seq "$tries"); do "$@" >/dev/null 2>&1 && return 0; sleep 2; done
+  fail "timed out waiting for $desc"
+}
 
-echo "Using engine: $ENGINE"
-$ENGINE run --rm -v "${CONFIG_DIR}":/c:Z cr.agentgateway.dev/agentgateway:v1.6.0 -f /c/agentgateway.yaml --validate-only
+run_suite() {
+  local engine="$1"
+  CUR_ENGINE="$engine"
+  echo; echo "################ engine: $engine ################"
+  TEST_HOME="$(mktemp -d -t convergence-e2e-XXXXXX)"
+  export HOME="$TEST_HOME"
+  local cfgdir="$TEST_HOME/.convergence"
 
-echo "==> Starting Convergence stack in background..."
-"$BIN" start
-
-echo "==> Waiting for services to become healthy..."
-MAX_ATTEMPTS=30
-ATTEMPT=0
-HEALTHY=false
-
-while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-  if curl -sf http://localhost:3000/v1/models >/dev/null 2>&1; then
-    HEALTHY=true
-    break
+  if [ "$engine" = podman ] && [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock" ]; then
+    echo "==> Starting temporary podman API socket (compose provider needs it)"
+    mkdir -p "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman"
+    podman system service --time=0 >/dev/null 2>&1 &
+    PODMAN_SVC_PID=$!
+    sleep 2
   fi
-  ATTEMPT=$((ATTEMPT + 1))
-  sleep 2
-done
 
-if [ "$HEALTHY" = "false" ]; then
-  echo "ERROR: AgentGateway failed to become healthy within 60s"
-  "$BIN" status || true
-  exit 1
+  echo "==> Starting stub upstream"
+  local sport; sport="$(free_port)"
+  "$engine" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
+  "$engine" run -d --name "$STUB_NAME" -p "$sport:8080" -v "$STUB_PY:/stub.py:ro,Z" \
+    "$STUB_IMAGE" python -u /stub.py >/dev/null
+  wait_for "stub upstream" 20 curl -sf "http://127.0.0.1:$sport/v1/models"
+
+  echo "==> convergence init (provider ollama -> stub on host port $sport)"
+  if "$BIN" init --help 2>&1 | grep -q -- '--yes'; then
+    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine"
+  else
+    printf '3\nhttp://host.docker.internal:%s\n' "$sport" | "$BIN" init
+  fi
+  # force the engine under test (older init detects docker first)
+  if grep -q '^engine:' "$cfgdir/config.yaml"; then
+    sed -i "s/^engine:.*/engine: $engine/" "$cfgdir/config.yaml"
+  fi
+  chmod 755 "$cfgdir"; chmod 644 "$cfgdir"/*.yaml
+
+  echo "==> Validating rendered AgentGateway config"
+  local envf=(); [ -f "$cfgdir/.env" ] && envf=(--env-file "$cfgdir/.env")
+  "$engine" run --rm "${envf[@]}" -v "$cfgdir":/c:Z "$AGW_IMAGE" -f /c/agentgateway.yaml --validate-only
+
+  echo "==> convergence start"
+  "$BIN" start
+  wait_for "gateway /v1/models" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
+  wait_for "stand-in metrics" 30 curl -sf "http://127.0.0.1:$STANDIN/metrics"
+  wait_for "pinball metrics" 30 curl -sf "http://127.0.0.1:$PINBALL/metrics"
+  "$BIN" status
+
+  echo "==> Pinball /check directly"
+  local pr
+  pr="$(curl -sf -X POST "http://127.0.0.1:$PINBALL/check" -H 'Content-Type: application/json' \
+    -d '{"model":"auto","messages":[{"role":"user","content":"How do I debug this distributed security race condition?"}]}')"
+  echo "$pr" | grep -q model || fail "unexpected pinball response: $pr"
+
+  echo "==> Baseline stats (before real traffic)"
+  local base_matches base_restored base_dec
+  base_matches="$(metric $STANDIN standin_matches_total)"
+  base_restored="$(metric $STANDIN standin_restored_total)"
+  base_dec="$(metric $PINBALL pinball_decisions_total)"
+
+  local token="ghp_$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 36)"
+  local body="{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"please store my token $token now\"}]}"
+
+  echo "==> Non-streaming round trip"
+  local resp
+  resp="$(curl -sf -m 30 "http://127.0.0.1:$GW/v1/chat/completions" -H 'Content-Type: application/json' -d "$body")"
+  echo "$resp" | grep -qF "$token" || fail "client response lacks the ORIGINAL token (not restored): $resp"
+
+  echo "==> Streaming (SSE) round trip"
+  local sse
+  sse="$(curl -sfN -m 30 "http://127.0.0.1:$GW/v1/chat/completions" -H 'Content-Type: application/json' \
+    -d "${body/\"model\":\"auto\"/\"model\":\"auto\",\"stream\":true}")"
+  echo "$sse" | grep -q '^data: ' || fail "no SSE frames: $sse"
+  # the token may be split across frames; reassemble delta content
+  local joined
+  joined="$(echo "$sse" | sed -n 's/^data: //p' | python3 -c '
+import sys, json
+out = ""
+for l in sys.stdin:
+    l = l.strip()
+    if not l or l == "[DONE]": continue
+    for c in json.loads(l).get("choices", []):
+        out += c.get("delta", {}).get("content") or ""
+print(out)')"
+  echo "$joined" | grep -qF "$token" || fail "streamed content lacks ORIGINAL token: $joined"
+
+  echo "==> Asserting what the upstream actually received"
+  local received; received="$(curl -sf "http://127.0.0.1:$sport/_received")"
+  echo "$received" | grep -qF "$token" && fail "RAW token leaked to upstream"
+  [ "$(echo "$received" | grep -c '<<secret-')" -ge 2 ] || fail "upstream did not receive placeholders in both requests: $received"
+  echo "$received" | grep -q '"stream":true' || fail "upstream never saw the stream request"
+
+  echo "==> Asserting metrics"
+  sleep 1
+  local m r d tin
+  m="$(metric $STANDIN standin_matches_total)"; r="$(metric $STANDIN standin_restored_total)"
+  d="$(metric $PINBALL pinball_decisions_total)"
+  [ "$m" -ge $((base_matches + 2)) ] || fail "standin_matches_total $base_matches -> $m"
+  [ "$r" -ge $((base_restored + 2)) ] || fail "standin_restored_total $base_restored -> $r"
+  [ "$d" -ge $((base_dec + 2)) ] || fail "pinball_decisions_total $base_dec -> $d"
+  tin="$(metric $STATS agentgateway_gen_ai_client_token_usage_sum)"
+  [ "$tin" -gt 0 ] || fail "agentgateway token usage metric is zero"
+
+  echo "==> convergence stats"
+  local out; out="$("$BIN" stats)"; echo "$out"
+  echo "$out" | grep -qE 'Credentials tokenized: +[1-9]' || fail "stats: tokenized is zero"
+  echo "$out" | grep -qE 'Credentials restored: +[1-9]' || fail "stats: restored is zero"
+  echo "$out" | grep -qE 'Decisions: [1-9]' || fail "stats: pinball decisions is zero"
+  echo "$out" | grep -qE 'Requests: +[1-9]' || fail "stats: gateway requests is zero"
+  "$BIN" stats --json | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["standin"]["credentials_restored"]>0 and d["pinball"]["decisions"]>0'
+
+  echo "==> Stopping stack"
+  "$BIN" stop
+  "$BIN" stats >/dev/null 2>&1 && fail "stats should exit non-zero when every source is down"
+  "$engine" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
+  rm -rf "$TEST_HOME"; TEST_HOME=""
+  export HOME="$ORIG_HOME"
+  echo "==> engine $engine PASSED"
+}
+
+ENGINES="${ENGINES:-}"
+if [ -z "$ENGINES" ]; then
+  for e in docker podman; do command -v "$e" >/dev/null 2>&1 && ENGINES="$ENGINES $e"; done
 fi
-
-echo "==> Checking 'convergence status'..."
-"$BIN" status
-
-echo "==> Testing Pinball ext_authz endpoint directly (:9201)..."
-PINBALL_RESP="$(curl -sf -X POST http://localhost:9201/check \
-  -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"How do I debug this distributed security race condition?"}]}')"
-
-echo "Pinball check response: $PINBALL_RESP"
-if ! echo "$PINBALL_RESP" | grep -q "model"; then
-  echo "ERROR: Unexpected Pinball check response"
-  exit 1
-fi
-
-echo "==> Testing Stand-In metrics endpoint directly (:9102)..."
-STANDIN_METRICS="$(curl -sf http://localhost:9102/metrics)"
-if ! echo "$STANDIN_METRICS" | grep -q "standin_requests_total"; then
-  echo "ERROR: Stand-In metrics not reachable or missing standin_requests_total"
-  exit 1
-fi
-
-echo "==> Checking 'convergence stats'..."
-"$BIN" stats
-
-echo "==> Stopping Convergence stack..."
-"$BIN" stop
-
-echo "==> Local E2E smoke test PASSED!"
+[ -n "$ENGINES" ] || fail "neither docker nor podman found"
+for e in $ENGINES; do run_suite "$e"; done
+echo; echo "==> Local E2E test PASSED (engines:$ENGINES)"

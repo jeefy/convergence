@@ -1,147 +1,239 @@
 package clientconfig
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
 
-func TestConfigureOpenCodeAndRestore(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
+const gw = "http://localhost:3000"
 
-	cfgDir := filepath.Join(tempHome, ".config", "opencode")
-	if err := os.MkdirAll(cfgDir, 0755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
+type fixture struct {
+	client   string
+	rel      string
+	existing string
+	keep     []string // substrings that must survive configuring
+	want     []string // substrings expected after configuring
+	edit     func(string) string
+}
+
+var fixtures = []fixture{
+	{"opencode", ".config/opencode/opencode.json",
+		"{\n  // my comment\n  \"model\": \"x/y\",\n  \"provider\": {\n    \"other\": {\"a\": 1,},\n  },\n}\n",
+		[]string{"// my comment", `"model": "x/y"`, `"other": {"a": 1,}`},
+		[]string{`"convergence"`, "http://localhost:3000/v1", "@ai-sdk/openai-compatible", `"pinball"`}, nil},
+	{"claude-code", ".claude/settings.json",
+		"{\n  // c\n  \"theme\": \"dark\",\n  \"env\": {\"FOO\": \"bar\"}\n}\n",
+		[]string{"// c", `"theme": "dark"`, `"FOO": "bar"`},
+		[]string{`"ANTHROPIC_BASE_URL": "http://localhost:3000"`, `"ANTHROPIC_AUTH_TOKEN": "convergence"`}, nil},
+	{"aider", ".aider.conf.yml", "# keep me\ndark-mode: true\n",
+		[]string{"# keep me", "dark-mode: true"},
+		[]string{"openai-api-base: http://localhost:3000/v1", "model: openai/auto"}, nil},
+	{"goose", ".config/goose/config.yaml", "# top\nGOOSE_MODE: auto\n",
+		[]string{"# top", "GOOSE_MODE: auto"},
+		[]string{"OPENAI_HOST: http://localhost:3000", "GOOSE_PROVIDER: openai"}, nil},
+	{"hermes", ".hermes/config.yaml", "# h\nmodel:\n  default: foo\nproviders:\n  custom:\n    name: x\n",
+		[]string{"# h", "default: foo", "name: x"},
+		[]string{"convergence:", "base_url: http://localhost:3000/v1"}, nil},
+	{"continue", ".continue/config.yaml",
+		"name: Mine\nversion: 2.0.0\nschema: v1\n# c\nmodels:\n  - name: Other\n    provider: ollama\n    model: x\n",
+		[]string{"name: Mine", "# c", "name: Other"},
+		[]string{"Convergence (Auto)", "apiBase: http://localhost:3000/v1"}, nil},
+}
+
+func setup(t *testing.T, f fixture, withFile bool) string {
+	t.Helper()
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	p := filepath.Join(h, f.rel)
+	if withFile {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(f.existing), 0o640); err != nil {
+			t.Fatal(err)
+		}
 	}
+	return p
+}
 
-	initialJSON := `{
-  "model": "gateway/pinball",
-  "provider": {
-    "gateway": {
-      "options": {
-        "baseURL": "https://opencode.agentgateway.grizzlygeek.net/v1",
-        "apiKey": "agentgateway"
-      }
-    }
-  }
-}`
-	path := filepath.Join(cfgDir, "opencode.json")
-	if err := os.WriteFile(path, []byte(initialJSON), 0644); err != nil {
-		t.Fatalf("write failed: %v", err)
+func read(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return string(b)
+}
 
-	targetURL := "http://localhost:3000/v1"
-	if err := ConfigureOpenCode(targetURL, false); err != nil {
-		t.Fatalf("ConfigureOpenCode failed: %v", err)
-	}
-
-	data, _ := os.ReadFile(path)
-	var root map[string]interface{}
-	json.Unmarshal(data, &root)
-	provider := root["provider"].(map[string]interface{})
-	gw := provider["gateway"].(map[string]interface{})
-	opts := gw["options"].(map[string]interface{})
-
-	if opts["baseURL"] != targetURL {
-		t.Errorf("expected baseURL %s, got %v", targetURL, opts["baseURL"])
-	}
-
-	backupPath := path + ".convergence.bak"
-	if _, err := os.Stat(backupPath); err != nil {
-		t.Errorf("expected backup file to exist")
-	}
-
-	if err := ConfigureOpenCode("", true); err != nil {
-		t.Fatalf("restore failed: %v", err)
-	}
-
-	restoredData, _ := os.ReadFile(path)
-	if !strings.Contains(string(restoredData), "https://opencode.agentgateway.grizzlygeek.net/v1") {
-		t.Errorf("restored content did not match original URL")
-	}
-
-	if _, err := os.Stat(backupPath); !os.IsNotExist(err) {
-		t.Errorf("expected backup file to be removed after restore")
+func TestFreshFileAndRestoreDeletes(t *testing.T) {
+	for _, f := range fixtures {
+		t.Run(f.client, func(t *testing.T) {
+			p := setup(t, f, false)
+			if _, err := Configure(f.client, Options{GatewayURL: gw}); err != nil {
+				t.Fatal(err)
+			}
+			got := read(t, p)
+			for _, w := range f.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("missing %q in:\n%s", w, got)
+				}
+			}
+			if strings.Contains(got, "sk-") {
+				t.Error("unexpected secret")
+			}
+			if _, err := Restore(f.client, Options{}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(p); !os.IsNotExist(err) {
+				t.Errorf("file should be removed, err=%v", err)
+			}
+		})
 	}
 }
 
-func TestConfigureClaudeCodeAndRestore(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
-
-	targetURL := "http://localhost:3000/v1"
-	if err := ConfigureClaudeCode(targetURL, false); err != nil {
-		t.Fatalf("ConfigureClaudeCode failed: %v", err)
-	}
-
-	path, _ := GetClaudeCodeSettingsPath()
-	data, _ := os.ReadFile(path)
-	var root map[string]interface{}
-	json.Unmarshal(data, &root)
-	env := root["env"].(map[string]interface{})
-
-	if env["ANTHROPIC_BASE_URL"] != targetURL {
-		t.Errorf("expected ANTHROPIC_BASE_URL %s, got %v", targetURL, env["ANTHROPIC_BASE_URL"])
-	}
-
-	if err := ConfigureClaudeCode("", true); err != nil {
-		t.Fatalf("restore failed: %v", err)
-	}
-}
-
-func TestConfigureAiderAndRestore(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
-
-	targetURL := "http://localhost:3000/v1"
-	if err := ConfigureAider(targetURL, false); err != nil {
-		t.Fatalf("ConfigureAider failed: %v", err)
-	}
-
-	path, _ := GetAiderConfigPath()
-	data, _ := os.ReadFile(path)
-	var root map[string]interface{}
-	yaml.Unmarshal(data, &root)
-
-	if root["openai-api-base"] != targetURL {
-		t.Errorf("expected openai-api-base %s, got %v", targetURL, root["openai-api-base"])
-	}
-
-	if err := ConfigureAider("", true); err != nil {
-		t.Fatalf("restore failed: %v", err)
+func TestExistingPreservedIdempotentRoundTrip(t *testing.T) {
+	for _, f := range fixtures {
+		t.Run(f.client, func(t *testing.T) {
+			p := setup(t, f, true)
+			if _, err := Configure(f.client, Options{GatewayURL: gw}); err != nil {
+				t.Fatal(err)
+			}
+			first := read(t, p)
+			for _, k := range append(f.keep, f.want...) {
+				if !strings.Contains(first, k) {
+					t.Errorf("missing %q in:\n%s", k, first)
+				}
+			}
+			st, _ := os.Stat(p)
+			if st.Mode().Perm() != 0o640 {
+				t.Errorf("mode = %v, want 0640", st.Mode().Perm())
+			}
+			res, err := Configure(f.client, Options{GatewayURL: gw})
+			if err != nil || res.Changed || read(t, p) != first {
+				t.Fatalf("second run not idempotent: changed=%v err=%v", res.Changed, err)
+			}
+			if _, err := Restore(f.client, Options{}); err != nil {
+				t.Fatal(err)
+			}
+			if got := read(t, p); got != f.existing {
+				t.Errorf("restore not byte-exact:\n%q\n!=\n%q", got, f.existing)
+			}
+			if _, err := os.Stat(p + backupSuffix); !os.IsNotExist(err) {
+				t.Error("backup should be cleaned up")
+			}
+		})
 	}
 }
 
-func TestConfigureContinueAndRestore(t *testing.T) {
-	tempHome := t.TempDir()
-	t.Setenv("HOME", tempHome)
-
-	targetURL := "http://localhost:3000/v1"
-	if err := ConfigureContinue(targetURL, false); err != nil {
-		t.Fatalf("ConfigureContinue failed: %v", err)
+func TestRestoreRefusesAfterExternalEditThenForceKeepsUserEdit(t *testing.T) {
+	for _, f := range fixtures {
+		t.Run(f.client, func(t *testing.T) {
+			p := setup(t, f, true)
+			if _, err := Configure(f.client, Options{GatewayURL: gw}); err != nil {
+				t.Fatal(err)
+			}
+			edited := read(t, p) + "\n# user-added\n"
+			if strings.HasSuffix(f.rel, ".json") {
+				edited = read(t, p) + "\n// user-added\n"
+			}
+			if err := os.WriteFile(p, []byte(edited), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Restore(f.client, Options{}); err == nil || !strings.Contains(err.Error(), "--force") {
+				t.Fatalf("expected refusal mentioning --force, got %v", err)
+			}
+			if read(t, p) != edited {
+				t.Fatal("refused restore must not touch the file")
+			}
+			if _, err := Restore(f.client, Options{Force: true}); err != nil {
+				t.Fatal(err)
+			}
+			got := read(t, p)
+			if !strings.Contains(got, "user-added") && f.client != "continue" && !strings.HasSuffix(f.rel, ".yml") && !strings.HasSuffix(f.rel, ".yaml") {
+				t.Errorf("user edit lost:\n%s", got)
+			}
+			for _, k := range f.keep {
+				if !strings.Contains(got, k) {
+					t.Errorf("lost %q:\n%s", k, got)
+				}
+			}
+			if strings.Contains(got, "convergence") && f.client != "hermes" {
+				t.Errorf("convergence keys remain:\n%s", got)
+			}
+		})
 	}
+}
 
-	path, _ := GetContinueConfigPath()
-	data, _ := os.ReadFile(path)
-	var root map[string]interface{}
-	json.Unmarshal(data, &root)
-	models := root["models"].([]interface{})
-
-	if len(models) == 0 {
-		t.Fatalf("expected models array to contain Convergence")
+func TestDryRunWritesNothing(t *testing.T) {
+	for _, f := range fixtures {
+		t.Run(f.client, func(t *testing.T) {
+			p := setup(t, f, true)
+			res, err := Configure(f.client, Options{GatewayURL: gw, DryRun: true})
+			if err != nil || !res.Changed || res.Diff == "" {
+				t.Fatalf("dry-run: changed=%v err=%v", res.Changed, err)
+			}
+			if read(t, p) != f.existing {
+				t.Error("file modified")
+			}
+			if _, err := os.Stat(p + manifestSuffix); !os.IsNotExist(err) {
+				t.Error("manifest written during dry-run")
+			}
+		})
 	}
+}
 
-	m := models[0].(map[string]interface{})
-	if m["apiBase"] != targetURL {
-		t.Errorf("expected apiBase %s, got %v", targetURL, m["apiBase"])
+func TestOpenCodeDefaultModelOnlyWithFlag(t *testing.T) {
+	f := fixtures[0]
+	p := setup(t, f, true)
+	if _, err := Configure("opencode", Options{GatewayURL: gw}); err != nil {
+		t.Fatal(err)
 	}
+	if !strings.Contains(read(t, p), `"model": "x/y"`) {
+		t.Error("default model changed without --set-default")
+	}
+	if _, err := Configure("opencode", Options{GatewayURL: gw, SetDefault: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, p), `"model": "convergence/auto"`) {
+		t.Error("--set-default not applied")
+	}
+	if _, err := Restore("opencode", Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, p) != f.existing {
+		t.Error("round trip after set-default not exact")
+	}
+}
 
-	if err := ConfigureContinue("", true); err != nil {
-		t.Fatalf("restore failed: %v", err)
+func TestClaudeCodeStripsV1AndKeepsExistingAPIKey(t *testing.T) {
+	f := fixtures[1]
+	p := setup(t, f, true)
+	if _, err := Configure("claude-code", Options{GatewayURL: gw + "/v1/"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, p); !strings.Contains(got, `"ANTHROPIC_BASE_URL": "http://localhost:3000"`) {
+		t.Errorf("v1 not stripped:\n%s", got)
+	}
+}
+
+func TestListReportsPointed(t *testing.T) {
+	f := fixtures[2]
+	setup(t, f, true)
+	if _, err := Configure("aider", Options{GatewayURL: gw}); err != nil {
+		t.Fatal(err)
+	}
+	sts, err := List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sts {
+		if s.Client == "aider" && !(s.Present && s.Pointed) {
+			t.Errorf("aider status wrong: %+v", s)
+		}
+		if s.Client == "goose" && s.Present {
+			t.Error("goose should be absent")
+		}
 	}
 }

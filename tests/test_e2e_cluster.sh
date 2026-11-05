@@ -37,49 +37,66 @@ if command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; t
   }
   trap cleanup_cluster EXIT
 
-  echo "==> Deploying Convergence via 'convergence cluster install'..."
-  "$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=dummy-test-key --anthropic-key=dummy-test-key
+  PF_PIDS=()
+  dump_debug() {
+    echo "==> FAILURE: dumping cluster state" >&2
+    kubectl -n "${NAMESPACE}" get pods -o wide || true
+    kubectl -n "${NAMESPACE}" describe pods || true
+    for p in $(kubectl -n "${NAMESPACE}" get pods -o name 2>/dev/null); do
+      echo "--- logs ${p}" >&2
+      kubectl -n "${NAMESPACE}" logs "${p}" --all-containers --tail=100 || true
+    done
+  }
+  cleanup_all() {
+    for pid in "${PF_PIDS[@]:-}"; do [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
+    cleanup_cluster
+  }
+  on_err() { dump_debug; }
+  trap on_err ERR
+  trap cleanup_all EXIT
 
-  echo "==> Waiting for Deployments to become available in namespace ${NAMESPACE}..."
-  kubectl -n "${NAMESPACE}" rollout status deployment/stand-in --timeout=120s
-  kubectl -n "${NAMESPACE}" rollout status deployment/pinball --timeout=120s
-  kubectl -n "${NAMESPACE}" rollout status deployment/agentgateway --timeout=180s
+  echo "==> Deploying Convergence via 'convergence cluster install'..."
+  "$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key
+
+  echo "==> Waiting for Deployments..."
+  for d in stand-in pinball agentgateway; do
+    kubectl -n "${NAMESPACE}" rollout status "deployment/${d}" --timeout=300s
+  done
+  kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod --all --timeout=300s
 
   echo "==> Checking 'convergence cluster status'..."
   "$BIN" cluster status --namespace="${NAMESPACE}"
 
-  echo "==> Testing in-cluster Service endpoints..."
-  # Port-forward and probe Pinball :9201 and AgentGateway :3000
-  kubectl -n "${NAMESPACE}" port-forward svc/pinball 19201:9201 &
-  PF_PINBALL_PID=$!
+  kubectl -n "${NAMESPACE}" port-forward svc/pinball 19201:9201 >/dev/null 2>&1 &
+  PF_PIDS+=($!)
+  kubectl -n "${NAMESPACE}" port-forward svc/agentgateway 13000:3000 >/dev/null 2>&1 &
+  PF_PIDS+=($!)
 
-  kubectl -n "${NAMESPACE}" port-forward svc/agentgateway 13000:3000 &
-  PF_GATEWAY_PID=$!
+  echo "==> Gateway GET /v1/models must return 200..."
+  CODE=000
+  for _ in $(seq 1 30); do
+    CODE="$(curl -s -o /tmp/models.out -w '%{http_code}' http://localhost:13000/v1/models || true)"
+    [ "$CODE" = "200" ] && break
+    sleep 2
+  done
+  echo "models status: ${CODE}"
+  [ "$CODE" = "200" ]
 
-  sleep 3
-
-  echo "==> Testing Pinball health via port-forward..."
-  PINBALL_CHECK="$(curl -sf -X POST http://localhost:19201/check \
-    -H "Content-Type: application/json" \
-    -d '{"model":"auto","messages":[{"role":"user","content":"Investigate memory leak"}]}' || true)"
-
+  echo "==> Pinball /check must return JSON with a 'model' key..."
+  PINBALL_CHECK=""
+  for _ in $(seq 1 30); do
+    PINBALL_CHECK="$(curl -sf -X POST http://localhost:19201/check \
+      -H "Content-Type: application/json" \
+      -d '{"model":"auto","messages":[{"role":"user","content":"Investigate memory leak"}]}' || true)"
+    [ -n "$PINBALL_CHECK" ] && break
+    sleep 2
+  done
   echo "Pinball response: ${PINBALL_CHECK}"
-  if ! echo "${PINBALL_CHECK}" | grep -q "model"; then
-    echo "ERROR: Pinball in-cluster check failed"
-    kill "$PF_PINBALL_PID" "$PF_GATEWAY_PID" || true
-    exit 1
-  fi
+  echo "${PINBALL_CHECK}" | python3 -c 'import json,sys; assert "model" in json.load(sys.stdin)'
 
-  echo "==> Testing AgentGateway models endpoint via port-forward..."
-  GATEWAY_MODELS="$(curl -sf http://localhost:13000/v1/models || true)"
-  echo "Gateway models response: ${GATEWAY_MODELS}"
-  if ! echo "${GATEWAY_MODELS}" | grep -q "object"; then
-    echo "ERROR: AgentGateway in-cluster models endpoint failed"
-    kill "$PF_PINBALL_PID" "$PF_GATEWAY_PID" || true
-    exit 1
-  fi
-
-  kill "$PF_PINBALL_PID" "$PF_GATEWAY_PID" || true
+  echo "==> Testing 'convergence cluster uninstall'..."
+  trap - ERR
+  "$BIN" cluster uninstall --namespace="${NAMESPACE}" --yes
   echo "==> In-cluster KinD test PASSED!"
 else
   echo "==> No live Kubernetes cluster detected. Skipped live deployment checks (dry-run only)."

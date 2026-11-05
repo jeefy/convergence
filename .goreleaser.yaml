@@ -4,7 +4,7 @@ project_name: convergence
 
 before:
   hooks:
-    - go mod tidy
+    - go mod download
 
 builds:
   - id: convergence
@@ -32,6 +32,18 @@ archives:
 
 checksum:
   name_template: "checksums.txt"
+  algorithm: sha256
+
+# SBOMs need syft on PATH. The release workflow installs it. Without syft,
+# build locally with: goreleaser release --snapshot --clean --skip=publish,sbom
+sboms:
+  - artifacts: archive
+
+release:
+  github:
+    owner: jeefy
+    name: convergence
+  prerelease: auto
 
 changelog:
   sort: asc

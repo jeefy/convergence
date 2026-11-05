@@ -1,0 +1,46 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. convergence init --provider ...
+        2. convergence start
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: convergence version
+      description: Output of `convergence version`
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [local (docker), local (podman), kubernetes]
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS / arch
+      placeholder: e.g. Fedora 43 amd64, macOS 15 arm64, WSL2 Ubuntu
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output of `convergence status` and `convergence logs <service>`. Remove keys and tokens first.
+      render: text
