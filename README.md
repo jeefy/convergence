@@ -1,6 +1,6 @@
 # Convergence
 
-Convergence is a unified, local and in-cluster orchestration harness for **AgentGateway**, **Stand-In** (PII & secret scrubbing), and **Pinball** (intelligent multi-tier model routing).
+Convergence is a unified, local and in-cluster orchestration harness for **AgentGateway**, [**Stand-In**](https://github.com/jeefy/stand-in) (PII & credential scrubbing), and [**Pinball**](https://github.com/jeefy/pinball) (intelligent multi-tier model routing and optimization).
 
 It exposes an OpenAI-compatible `/v1` endpoint on port `3000` (with automatic Anthropic Messages translation) that scrubs credentials on the wire and dynamically routes requests to the optimal model tier.
 
@@ -12,13 +12,25 @@ Client (OpenCode, Claude Code, Aider, Cursor)
               │             ▲
    (ext_proc) │             │ (ext_authz)
    Sanitize   ▼             ▼ Model Tier
-          Stand-In       Pinball
-          (Secret/PII)   (Scorer)
+     [Stand-In]          [Pinball]
+    (Secret/PII)         (Scorer)
+   github.com/jeefy/   github.com/jeefy/
+       stand-in             pinball
               │             ▲
               └──────┬──────┘
                      ▼ Upstream :4141 / Cloud
           Copilot / Direct / Ollama
 ```
+
+---
+
+## Architecture & Ecosystem
+
+Convergence weaves together:
+- **AgentGateway (`v1.6.0`)**: High-performance Envoy-based AI gateway providing provider translation, unified access logs, and rate/cost attribution.
+- [**jeefy/stand-in**](https://github.com/jeefy/stand-in) (`0.4.1`): Transparent Envoy `ext_proc` service that tokenizes API keys and sensitive tokens on ingress (`<<secret-...>>`) and reconstitutes them on egress.
+- [**jeefy/pinball**](https://github.com/jeefy/pinball) (`0.7.2`): Envoy `ext_authz` autopilot that inspects sanitized prompts and assigns optimal model tiers (`light`, `standard`, `deep`).
+- **Periodic Optimization & Judgement**: Pinball evaluates traffic patterns, replays historical requests across candidate models, and calculates within-tier re-rankings to continually minimize spend and latency. Defaults to a weekly evaluation schedule (`0 3 * * 0`, configurable).
 
 ---
 
@@ -51,6 +63,9 @@ convergence start
 # Check health and view live stats
 convergence status
 convergence stats
+
+# Trigger Pinball usage evaluation & re-ranking check (dry-run or live)
+convergence optimize --dry-run
 
 # Stop the stack
 convergence stop
@@ -123,7 +138,8 @@ convergence cluster status --namespace=convergence
 | `convergence status` | Show container health and listening ports |
 | `convergence logs [-f]` | Tail container logs |
 | `convergence stats` | Display request telemetry, token usage, and cost estimates |
-| `convergence cluster install` | Deploy Convergence manifests to Kubernetes |
+| `convergence optimize [--dry-run]` | Run Pinball model evaluation and within-tier re-ranking |
+| `convergence cluster install` | Deploy Convergence manifests to Kubernetes (includes weekly CronJob) |
 | `convergence cluster status` | Inspect in-cluster deployment health |
 | `convergence config <client> [restore]` | Configure or restore external client applications |
 | `convergence version` | Display version, commit, and build date |

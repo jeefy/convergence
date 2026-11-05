@@ -269,6 +269,44 @@ spec:
     - name: http
       port: 9201
       targetPort: 9201
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pinball-optimize
+  namespace: {{ .Namespace }}
+spec:
+  schedule: "{{ .OptSchedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: optimize
+              image: ghcr.io/jeefy/pinball:0.7.2
+              command: ["pinball-optimize", "run"]
+              env:
+                - name: PINBALL_CONFIG
+                  value: /etc/pinball/pinball.yaml
+                - name: PINBALL_OVERLAY_PATH
+                  value: /var/lib/pinball/overlay.yaml
+                - name: PINBALL_OPT_GATEWAY_URL
+                  value: "http://agentgateway.{{ .Namespace }}.svc.cluster.local:3000"
+                - name: PINBALL_OPT_MODEL_PREFIX
+                  value: "opt-"
+                - name: PINBALL_OPT_BUDGET_USD
+                  value: "10.0"
+              volumeMounts:
+                - name: overlay
+                  mountPath: /var/lib/pinball
+          volumes:
+            - name: overlay
+              emptyDir: {}
 {{- if eq .Provider "copilot" }}
 ---
 apiVersion: apps/v1

@@ -23,6 +23,7 @@ type Config struct {
 	Provider     ProviderType `yaml:"provider"`      // "copilot", "direct", "ollama"
 	GatewayPort  int          `yaml:"gateway_port"`  // default 3000
 	StandinSalt  string       `yaml:"standin_salt"`  // 32-byte hex string
+	OptSchedule  string       `yaml:"opt_schedule,omitempty"` // cron expression, default "0 3 * * 0" (weekly Sunday 03:00)
 	CopilotToken string       `yaml:"copilot_token,omitempty"`
 	OpenAIKey    string       `yaml:"openai_key,omitempty"`
 	AnthropicKey string       `yaml:"anthropic_key,omitempty"`
@@ -37,6 +38,7 @@ func DefaultConfig() *Config {
 		Provider:    ProviderDirect,
 		GatewayPort: 3000,
 		StandinSalt: salt,
+		OptSchedule: "0 3 * * 0", // weekly Sunday 03:00
 		OllamaURL:   "http://host.docker.internal:11434",
 	}
 }
@@ -82,6 +84,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.GatewayPort == 0 {
 		cfg.GatewayPort = 3000
+	}
+	if cfg.OptSchedule == "" {
+		cfg.OptSchedule = "0 3 * * 0"
 	}
 	return &cfg, nil
 }

@@ -23,6 +23,7 @@ var clusterInstallCmd = &cobra.Command{
 		copilotTok, _ := cmd.Flags().GetString("copilot-token")
 		openaiKey, _ := cmd.Flags().GetString("openai-key")
 		anthropicKey, _ := cmd.Flags().GetString("anthropic-key")
+		optSchedule, _ := cmd.Flags().GetString("opt-schedule")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 		opts := &k8s.ClusterOptions{
@@ -31,6 +32,7 @@ var clusterInstallCmd = &cobra.Command{
 			CopilotToken: copilotTok,
 			OpenAIKey:    openaiKey,
 			AnthropicKey: anthropicKey,
+			OptSchedule:  optSchedule,
 			DryRun:       dryRun,
 		}
 
@@ -76,6 +78,7 @@ func init() {
 	clusterInstallCmd.Flags().String("copilot-token", "", "GitHub Copilot token")
 	clusterInstallCmd.Flags().String("openai-key", "", "OpenAI API key")
 	clusterInstallCmd.Flags().String("anthropic-key", "", "Anthropic API key")
+	clusterInstallCmd.Flags().String("opt-schedule", "0 3 * * 0", "Cron schedule for pinball optimizer evaluation checks (default: weekly Sunday 03:00)")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 
 	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")

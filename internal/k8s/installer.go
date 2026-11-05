@@ -22,6 +22,7 @@ type ClusterOptions struct {
 	StandinSalt  string
 	UseBuiltinDB bool
 	DBDSN        string
+	OptSchedule  string
 	DryRun       bool
 }
 
@@ -33,6 +34,9 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 
 	if opts.StandinSalt == "" {
 		opts.StandinSalt, _ = config.GenerateSalt()
+	}
+	if opts.OptSchedule == "" {
+		opts.OptSchedule = "0 3 * * 0" // weekly Sunday 03:00
 	}
 
 	tmpl, err := template.New("k8s").Parse(string(tmplData))
