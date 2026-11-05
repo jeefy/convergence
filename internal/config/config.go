@@ -19,6 +19,27 @@ const (
 	ProviderOllama  ProviderType = "ollama"
 )
 
+type SandboxType string
+
+const (
+	SandboxNone      SandboxType = "none"
+	SandboxOpenShell SandboxType = "openshell"
+	SandboxNono      SandboxType = "nono"
+	SandboxDockerSbx SandboxType = "docker-sbx"
+	SandboxK8sAgent  SandboxType = "k8s-agent"
+)
+
+func ParseSandbox(s string) (SandboxType, error) {
+	switch sbx := SandboxType(s); sbx {
+	case "", SandboxNone:
+		return SandboxNone, nil
+	case SandboxOpenShell, SandboxNono, SandboxDockerSbx, SandboxK8sAgent:
+		return sbx, nil
+	default:
+		return "", fmt.Errorf("unknown sandbox %q (want none, openshell, nono, docker-sbx or k8s-agent)", s)
+	}
+}
+
 // ParseProvider converts user input into a known ProviderType.
 func ParseProvider(s string) (ProviderType, error) {
 	switch p := ProviderType(s); p {
@@ -38,15 +59,18 @@ const (
 
 // Fixed host ports published by the local compose stack (besides the gateway port).
 const (
-	StandinMetricsPort = 9102
-	PinballPort        = 9201
-	GatewayStatsPort   = 15020
-	CopilotAPIPort     = 4141
+	StandinMetricsPort  = 9102
+	PinballPort         = 9201
+	GatewayStatsPort    = 15020
+	CopilotAPIPort      = 4141
+	OpenShellPort       = 17670
+	OpenShellHealthPort = 17671
 )
 
 type Config struct {
 	Engine       string       `yaml:"engine"`                 // "docker" or "podman"
 	Provider     ProviderType `yaml:"provider"`               // "copilot", "direct", "ollama"
+	Sandbox      SandboxType  `yaml:"sandbox,omitempty"`      // "none", "openshell", "docker-sbx", "k8s-agent"
 	GatewayPort  int          `yaml:"gateway_port"`           // default 3000
 	BindAddress  string       `yaml:"bind_address"`           // host address published ports bind to; default 127.0.0.1
 	StandinSalt  string       `yaml:"standin_salt"`           // 32-byte hex string
@@ -64,10 +88,11 @@ type Config struct {
 	OllamaModelStandard string `yaml:"ollama_model_standard,omitempty"`
 	OllamaModelHeavy    string `yaml:"ollama_model_heavy,omitempty"`
 
-	ImageAgentGateway string `yaml:"image_agentgateway,omitempty"`
-	ImageStandIn      string `yaml:"image_standin,omitempty"`
-	ImagePinball      string `yaml:"image_pinball,omitempty"`
-	ImageCopilotAPI   string `yaml:"image_copilot_api,omitempty"`
+	ImageAgentGateway     string `yaml:"image_agentgateway,omitempty"`
+	ImageStandIn          string `yaml:"image_standin,omitempty"`
+	ImagePinball          string `yaml:"image_pinball,omitempty"`
+	ImageCopilotAPI       string `yaml:"image_copilot_api,omitempty"`
+	ImageOpenShellGateway string `yaml:"image_openshell_gateway,omitempty"`
 }
 
 // NamedPort is a host port the stack publishes, with the service that owns it.
@@ -87,6 +112,10 @@ func (c *Config) PublishedPorts() []NamedPort {
 	if c.Provider == ProviderCopilot {
 		ports = append(ports, NamedPort{"copilot-api", CopilotAPIPort})
 	}
+	if c.Sandbox == SandboxOpenShell {
+		ports = append(ports, NamedPort{"openshell", OpenShellPort})
+		ports = append(ports, NamedPort{"openshell health", OpenShellHealthPort})
+	}
 	return ports
 }
 
@@ -105,6 +134,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Engine:      "docker",
 		Provider:    ProviderDirect,
+		Sandbox:     SandboxNone,
 		GatewayPort: DefaultGatewayPort,
 		BindAddress: DefaultBindAddress,
 		StandinSalt: salt,

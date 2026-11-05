@@ -79,6 +79,31 @@ func TestRenderAllProvidersAndEngines(t *testing.T) {
 	}
 }
 
+func TestRenderOpenShellSandbox(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.DefaultConfig()
+	cfg.Sandbox = config.SandboxOpenShell
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatalf("RenderAssets with openshell: %v", err)
+	}
+
+	composeData, err := os.ReadFile(filepath.Join(dir, ComposeFile))
+	if err != nil {
+		t.Fatalf("read compose file: %v", err)
+	}
+	if !strings.Contains(string(composeData), "openshell:") {
+		t.Errorf("expected openshell service in compose file")
+	}
+
+	tomlData, err := os.ReadFile(filepath.Join(dir, "openshell.toml"))
+	if err != nil {
+		t.Fatalf("read openshell.toml: %v", err)
+	}
+	if !strings.Contains(string(tomlData), "version = 2") {
+		t.Errorf("expected schema version 2 in openshell.toml")
+	}
+}
+
 func TestRenderBindsLoopbackByDefault(t *testing.T) {
 	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
 	for _, want := range []string{"127.0.0.1:3000:3000", "127.0.0.1:15020:15020", "127.0.0.1:9102:9102", "127.0.0.1:9201:9201", "127.0.0.1:4141:4141"} {

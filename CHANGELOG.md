@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Pluggable agent sandboxing runtime support (`internal/sandbox`): `none`, `openshell`, `nono`, `docker-sbx`, and `k8s-agent`.
+- `nono` driver for kernel-enforced process sandboxing (Landlock on Linux, Seatbelt on macOS) with ~0ms latency and zero background daemons.
+- `convergence sandbox run <agent> [args...]` command to launch agents directly inside the configured sandbox with inference pre-routed to Convergence.
+- `convergence init --sandbox <runtime>` flag to choose or enable sandbox integration.
+- Optional NVIDIA OpenShell gateway compose service bundled with schema v2 `openshell.toml` config, exposing ports 17670 (gRPC/HTTP) and 17671 (healthz).
+- `convergence sandbox status` and `convergence sandbox list` CLI commands.
+
 ## [0.1.1] - 2026-11-05
 
 ### Added

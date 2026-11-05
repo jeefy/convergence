@@ -104,3 +104,35 @@ services:
 volumes:
   copilot-data:
 {{- end }}
+{{- if eq .Config.Sandbox "openshell" }}
+
+  openshell:
+    image: {{ .Images.OpenShellGateway }}
+    restart: unless-stopped
+    command: []
+    user: "0"
+    ports:
+      - "{{ .Config.BindAddress }}:{{ .Ports.OpenShell }}:17670"
+      - "{{ .Config.BindAddress }}:{{ .Ports.OpenShellHealth }}:17671"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - openshell-data:/var/lib/openshell
+      - ./openshell.toml:/etc/openshell/gateway.toml:ro{{ .VolumeSuffix }}
+    environment:
+      OPENSHELL_GATEWAY_CONFIG: /etc/openshell/gateway.toml
+      OPENSHELL_DB_URL: "sqlite:/var/lib/openshell/gateway.db?mode=rwc"
+      XDG_DATA_HOME: /var/lib/openshell
+      XDG_STATE_HOME: /var/lib/openshell/state
+      HOME: /var/lib/openshell
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "host.openshell.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  openshell-data:
+{{- end }}

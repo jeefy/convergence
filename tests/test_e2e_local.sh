@@ -87,7 +87,7 @@ run_suite() {
 
   echo "==> convergence init (provider ollama -> stub on host port $sport)"
   if "$BIN" init --help 2>&1 | grep -q -- '--yes'; then
-    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine"
+    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --sandbox openshell --engine "$engine"
   else
     printf '3\nhttp://host.docker.internal:%s\n' "$sport" | "$BIN" init
   fi
@@ -106,7 +106,13 @@ run_suite() {
   wait_for "gateway /v1/models" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
   wait_for "stand-in metrics" 30 curl -sf "http://127.0.0.1:$STANDIN/metrics"
   wait_for "pinball metrics" 30 curl -sf "http://127.0.0.1:$PINBALL/metrics"
+  wait_for "openshell health" 30 curl -sf "http://127.0.0.1:17671/healthz"
   "$BIN" status
+
+  echo "==> Testing sandbox status & list"
+  "$BIN" sandbox list | grep -q "openshell" || fail "sandbox list missing openshell"
+  "$BIN" sandbox status | grep -q "openshell" || fail "sandbox status missing openshell"
+  "$BIN" sandbox status --json | grep -q '"available": true' || fail "sandbox status not available"
 
   echo "==> Pinball /check directly"
   local pr

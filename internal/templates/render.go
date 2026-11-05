@@ -18,10 +18,11 @@ var assetsFS embed.FS
 
 // Images pinned by this binary. `convergence upgrade` re-renders with these.
 type Images struct {
-	AgentGateway string
-	StandIn      string
-	Pinball      string
-	CopilotAPI   string
+	AgentGateway     string
+	StandIn          string
+	Pinball          string
+	CopilotAPI       string
+	OpenShellGateway string
 }
 
 var PinnedImages = Images{
@@ -29,14 +30,17 @@ var PinnedImages = Images{
 	StandIn:      "ghcr.io/jeefy/stand-in:0.4.1",
 	Pinball:      "ghcr.io/jeefy/pinball:0.7.3",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
-	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0",
+	CopilotAPI:       "ghcr.io/ericc-ch/copilot-api:v0.7.0",
+	OpenShellGateway: "ghcr.io/nvidia/openshell/gateway:latest",
 }
 
 type HostPorts struct {
-	GatewayStats   int
-	StandinMetrics int
-	Pinball        int
-	CopilotAPI     int
+	GatewayStats    int
+	StandinMetrics  int
+	Pinball         int
+	CopilotAPI      int
+	OpenShell       int
+	OpenShellHealth int
 }
 
 type RenderContext struct {
@@ -85,6 +89,9 @@ func ResolveImages(cfg *config.Config) Images {
 	if cfg.ImageCopilotAPI != "" {
 		imgs.CopilotAPI = cfg.ImageCopilotAPI
 	}
+	if cfg.ImageOpenShellGateway != "" {
+		imgs.OpenShellGateway = cfg.ImageOpenShellGateway
+	}
 	return imgs
 }
 
@@ -94,10 +101,12 @@ func newContext(cfg *config.Config, res *models.Resolved) RenderContext {
 		Models: res,
 		Images: ResolveImages(cfg),
 		Ports: HostPorts{
-			GatewayStats:   config.GatewayStatsPort,
-			StandinMetrics: config.StandinMetricsPort,
-			Pinball:        config.PinballPort,
-			CopilotAPI:     config.CopilotAPIPort,
+			GatewayStats:    config.GatewayStatsPort,
+			StandinMetrics:  config.StandinMetricsPort,
+			Pinball:         config.PinballPort,
+			CopilotAPI:      config.CopilotAPIPort,
+			OpenShell:       config.OpenShellPort,
+			OpenShellHealth: config.OpenShellHealthPort,
 		},
 		VolumeSuffix: VolumeSuffix(),
 	}
@@ -119,7 +128,12 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 		return err
 	}
 	ctx := newContext(cfg, res)
-	for _, file := range publicFiles {
+	filesToRender := append([]string{}, publicFiles...)
+	if cfg.Sandbox == config.SandboxOpenShell {
+		filesToRender = append(filesToRender, "openshell.toml")
+	}
+
+	for _, file := range filesToRender {
 		data, err := assetsFS.ReadFile("assets/" + file + ".tmpl")
 		if err != nil {
 			return fmt.Errorf("reading template %s: %w", file, err)

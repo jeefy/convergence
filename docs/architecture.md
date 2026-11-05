@@ -46,16 +46,19 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 | Stand-In | 9102 | 9102 | Prometheus metrics |
 | Pinball | 9201 | 9201 | ext_authz and metrics |
 | copilot-api | 4141 | 4141 | Copilot upstream (copilot provider only) |
+| openshell | 17670 | 17670 | OpenShell gRPC/HTTP gateway (sandbox enabled only) |
+| openshell health | 17671 | 17671 | OpenShell health check (sandbox enabled only) |
 
 ### Files under `~/.convergence`
 
 | Path | Mode | Contents |
 |---|---|---|
-| `config.yaml` | 0600 | Engine, provider, ports, `bind_address`, provider credentials (plaintext) |
+| `config.yaml` | 0600 | Engine, provider, sandbox, ports, `bind_address`, provider credentials (plaintext) |
 | `.env` | 0600 | Secrets injected into compose (`STANDIN_SALT`, API keys, Copilot token) |
 | `docker-compose.yaml` | 0600 | Rendered compose stack, no secrets |
 | `agentgateway.yaml` | 0600 | Rendered gateway config (listeners, ext_proc/ext_authz, backends) |
 | `pinball.yaml` | 0600 | Model catalog and tier assignments, generated from the model mapping |
+| `openshell.toml` | 0644 | Rendered OpenShell gateway config (schema v2, DooD Docker driver, openshell sandbox only) |
 | `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
 | `logs/` | 0700 | Gateway access logs |
 
@@ -89,6 +92,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 | Stand-In | `ghcr.io/jeefy/stand-in:0.4.1` |
 | Pinball | `ghcr.io/jeefy/pinball:0.7.3` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0` |
+| openshell | `ghcr.io/nvidia/openshell/gateway:latest` |
 
 Tags are pinned, digests aren't yet.
 

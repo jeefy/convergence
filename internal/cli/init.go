@@ -21,6 +21,7 @@ type initFlags struct {
 	yes          bool
 	provider     string
 	engine       string
+	sandbox      string
 	copilotToken string
 	openAIKey    string
 	anthropicKey string
@@ -36,6 +37,7 @@ type initFlags struct {
 	imageStandIn    string
 	imagePinball    string
 	imageCopilotAPI string
+	imageOpenShell  string
 }
 
 var initOpts initFlags
@@ -189,6 +191,14 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 		}
 	}
 
+	if f.sandbox != "" {
+		sbx, err := config.ParseSandbox(f.sandbox)
+		if err != nil {
+			return err
+		}
+		cfg.Sandbox = sbx
+	}
+
 	if f.imageAGW != "" {
 		cfg.ImageAgentGateway = f.imageAGW
 	}
@@ -200,6 +210,9 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 	}
 	if f.imageCopilotAPI != "" {
 		cfg.ImageCopilotAPI = f.imageCopilotAPI
+	}
+	if f.imageOpenShell != "" {
+		cfg.ImageOpenShellGateway = f.imageOpenShell
 	}
 	return nil
 }
@@ -296,5 +309,7 @@ func init() {
 	f.StringVar(&initOpts.imageStandIn, "image-standin", "", "Override stand-in image (tag or digest)")
 	f.StringVar(&initOpts.imagePinball, "image-pinball", "", "Override pinball image (tag or digest)")
 	f.StringVar(&initOpts.imageCopilotAPI, "image-copilot-api", "", "Override copilot-api image (tag or digest)")
+	f.StringVar(&initOpts.imageOpenShell, "image-openshell", "", "Override openshell gateway image (tag or digest)")
+	f.StringVar(&initOpts.sandbox, "sandbox", "", "Sandboxing runtime: none, openshell, nono, docker-sbx, or k8s-agent (default: none)")
 	rootCmd.AddCommand(initCmd)
 }
