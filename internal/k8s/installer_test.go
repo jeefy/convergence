@@ -24,7 +24,7 @@ func TestRenderManifestsCopilot(t *testing.T) {
 	if !strings.Contains(manifests, "name: convergence-copilot") {
 		t.Errorf("manifests missing copilot secret")
 	}
-	if !strings.Contains(manifests, "standin_enforce") {
+	if !strings.Contains(manifests, "stand-in.convergence-test.svc.cluster.local:9101") {
 		t.Errorf("manifests missing stand-in extProc")
 	}
 	if !strings.Contains(manifests, "image: cr.agentgateway.dev/agentgateway:v1.6.0") {

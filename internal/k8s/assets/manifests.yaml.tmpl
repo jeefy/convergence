@@ -33,40 +33,113 @@ data:
   config.yaml: |
     config:
       statsAddr: 0.0.0.0:15020
+      connectionTerminationDeadline: 600s
+      logging:
+        format: json
     gateways:
       default:
         port: 3000
-        protocol: HTTP
-        extProc: &standin_enforce
-          grpcService:
-            endpoint: stand-in:9101
-          mode:
-            requestHeader: SEND
-            requestBody: FULL_DUPLEX_STREAMED
-            responseHeader: SEND
-            responseBody: FULL_DUPLEX_STREAMED
-          failureMode: FAIL_OPEN
-          timeout: 5s
+        extProc:
+          conditional:
+            - condition: 'request.method == "POST" && !request.path.endsWith("/embeddings")'
+              host: "stand-in.{{ .Namespace }}.svc.cluster.local:9101"
+              failureMode: failOpen
+              processingOptions:
+                requestHeaderMode: send
+                responseHeaderMode: send
+                requestBodyMode: fullDuplexStreamed
+                responseBodyMode: fullDuplexStreamed
+                requestTrailerMode: send
+                responseTrailerMode: send
+              policies:
+                http: {requestTimeout: 5s}
     llm:
       policies:
+        timeout:
+          responseIdleTimeout: 120s
         extAuthz:
-          httpService:
-            endpoint: http://pinball:9201/check
-            failureMode: ALLOW
-            timeout: 2s
-          condition: 'json(request.body).model in ["auto", "pinball"]'
+          conditional:
+            - condition: 'request.method == "POST" && json(request.body).model in ["auto", "pinball"]'
+              host: "pinball.{{ .Namespace }}.svc.cluster.local:9201"
+              failureMode: allow
+              includeRequestBody: {maxRequestBytes: 16777216}
+              includeRequestHeaders: [content-type, x-pinball-tier, x-pinball-min-tier, x-agw-caller]
+              protocol:
+                http:
+                  path: '"/check"'
+                  metadata:
+                    model: 'json(response.body).model'
+                    tier: 'json(response.body).tier'
+                    reason: 'json(response.body).reason'
       providers:
 {{- if eq .Provider "copilot" }}
-        copilot-proxy:
-          type: openai
-          baseUrl: http://copilot-api:4141/v1
+        - name: copilot-completions
+          provider:
+            custom:
+              providerOverride: openai
+              formats:
+                - {type: completions, path: /v1/chat/completions}
+          params:
+            baseUrl: http://copilot-api.{{ .Namespace }}.svc.cluster.local:4141/v1
+            apiKey: dummy
 {{- else }}
-        openai:
-          type: openai
-          apiKey: "{{ .OpenAIKey }}"
-        anthropic:
-          type: anthropic
-          apiKey: "{{ .AnthropicKey }}"
+        - name: openai-direct
+          provider: openAI
+          params:
+            apiKey: "{{ .OpenAIKey }}"
+        - name: anthropic-direct
+          provider: anthropic
+          params:
+            apiKey: "{{ .AnthropicKey }}"
+{{- end }}
+      virtualModels:
+        - name: auto
+          routing: &pinball_routing
+            conditional:
+              targets:
+                - {when: 'default(extauthz.model, "") == "claude-haiku-5.5"', model: pinball-claude-haiku-5.5}
+                - {when: 'default(extauthz.model, "") == "gemini-3.8-flash"', model: pinball-gemini-3.8-flash}
+                - {when: 'default(extauthz.model, "") == "claude-sonnet-5.5"', model: pinball-claude-sonnet-5.5}
+                - {when: 'default(extauthz.model, "") == "claude-opus-5.5"', model: pinball-claude-opus-5.5}
+                - {model: pinball-claude-sonnet-5.5}
+        - name: pinball
+          routing: *pinball_routing
+      models:
+        - name: pinball-claude-haiku-5.5
+          visibility: internal
+{{- if eq .Provider "copilot" }}
+          provider: {reference: copilot-completions}
+          params: {model: claude-haiku-5.5}
+{{- else }}
+          provider: {reference: anthropic-direct}
+          params: {model: claude-3-5-haiku-latest}
+{{- end }}
+        - name: pinball-gemini-3.8-flash
+          visibility: internal
+{{- if eq .Provider "copilot" }}
+          provider: {reference: copilot-completions}
+          params: {model: gemini-3.8-flash}
+{{- else }}
+          provider: {reference: openai-direct}
+          params: {model: gpt-4o-mini}
+{{- end }}
+        - name: pinball-claude-sonnet-5.5
+          visibility: internal
+{{- if eq .Provider "copilot" }}
+          provider: {reference: copilot-completions}
+          params: {model: claude-sonnet-5.5}
+{{- else }}
+          provider: {reference: anthropic-direct}
+          params: {model: claude-3-5-sonnet-latest}
+{{- end }}
+        - name: pinball-claude-opus-5.5
+          visibility: internal
+{{- if eq .Provider "copilot" }}
+          provider: {reference: copilot-completions}
+          params: {model: claude-opus-5.5}
+{{- else }}
+          provider: {reference: anthropic-direct}
+          params: {model: claude-3-opus-latest}
 {{- end }}
 ---
 apiVersion: apps/v1

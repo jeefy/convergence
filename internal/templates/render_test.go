@@ -31,10 +31,10 @@ func TestRenderAssetsCopilot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read agentgateway: %v", err)
 	}
-	if !strings.Contains(string(gwData), "standin_enforce") {
-		t.Errorf("expected agentgateway.yaml to contain standin_enforce")
+	if !strings.Contains(string(gwData), "stand-in:9101") {
+		t.Errorf("expected agentgateway.yaml to contain stand-in endpoint")
 	}
-	if !strings.Contains(string(gwData), "http://pinball:9201/check") {
+	if !strings.Contains(string(gwData), "pinball:9201") {
 		t.Errorf("expected agentgateway.yaml to contain pinball check")
 	}
 

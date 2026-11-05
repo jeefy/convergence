@@ -1,115 +1,135 @@
 config:
   statsAddr: 0.0.0.0:15020
   connectionTerminationDeadline: 600s
-  accessLog:
-    file:
-      path: /var/log/agentgateway/access.jsonl
-      format: json
+  logging:
+    format: json
 
 gateways:
   default:
     port: 3000
-    protocol: HTTP
-    extProc: &standin_enforce
-      grpcService:
-        endpoint: stand-in:9101
-      mode:
-        requestHeader: SEND
-        requestBody: FULL_DUPLEX_STREAMED
-        responseHeader: SEND
-        responseBody: FULL_DUPLEX_STREAMED
-      failureMode: FAIL_OPEN
-      timeout: 5s
+    extProc:
+      conditional:
+        - condition: 'request.method == "POST" && !request.path.endsWith("/embeddings")'
+          host: "stand-in:9101"
+          failureMode: failOpen
+          processingOptions:
+            requestHeaderMode: send
+            responseHeaderMode: send
+            requestBodyMode: fullDuplexStreamed
+            responseBodyMode: fullDuplexStreamed
+            requestTrailerMode: send
+            responseTrailerMode: send
+          policies:
+            http: {requestTimeout: 5s}
 
 llm:
   policies:
     timeout:
       responseIdleTimeout: 120s
     extAuthz:
-      httpService:
-        endpoint: http://pinball:9201/check
-        failureMode: ALLOW
-        timeout: 2s
-      condition: 'json(request.body).model in ["auto", "pinball"]'
+      conditional:
+        - condition: 'request.method == "POST" && json(request.body).model in ["auto", "pinball"]'
+          host: "pinball:9201"
+          failureMode: allow
+          includeRequestBody: {maxRequestBytes: 16777216}
+          includeRequestHeaders: [content-type, x-pinball-tier, x-pinball-min-tier, x-agw-caller]
+          protocol:
+            http:
+              path: '"/check"'
+              metadata:
+                model: 'json(response.body).model'
+                tier: 'json(response.body).tier'
+                reason: 'json(response.body).reason'
 
   providers:
 {{- if eq .Config.Provider "copilot" }}
-    copilot-proxy:
-      type: openai
-      baseUrl: http://copilot-api:4141/v1
+    - name: copilot-completions
+      provider:
+        custom:
+          providerOverride: openai
+          formats:
+            - {type: completions, path: /v1/chat/completions}
+      params:
+        baseUrl: http://copilot-api:4141/v1
+        apiKey: dummy
 {{- else if eq .Config.Provider "ollama" }}
-    ollama-local:
-      type: ollama
-      baseUrl: {{ .Config.OllamaURL }}
+    - name: ollama-local
+      provider: ollama
+      params:
+        baseUrl: {{ .Config.OllamaURL }}
 {{- else }}
-    openai:
-      type: openai
-      apiKey: "{{ .Config.OpenAIKey }}"
-    anthropic:
-      type: anthropic
-      apiKey: "{{ .Config.AnthropicKey }}"
+    - name: openai-direct
+      provider: openAI
+      params:
+        apiKey: "{{ .Config.OpenAIKey }}"
+    - name: anthropic-direct
+      provider: anthropic
+      params:
+        apiKey: "{{ .Config.AnthropicKey }}"
 {{- end }}
 
   virtualModels:
-    auto:
-      routing:
-        header: extauthz.model
-        fallback: pinball-claude-sonnet-5.5
-        targets:
-          claude-haiku-5.5: pinball-claude-haiku-5.5
-          gemini-3.8-flash: pinball-gemini-3.8-flash
-          claude-sonnet-5.5: pinball-claude-sonnet-5.5
-          claude-opus-5.5: pinball-claude-opus-5.5
+    - name: auto
+      routing: &pinball_routing
+        conditional:
+          targets:
+            - {when: 'default(extauthz.model, "") == "claude-haiku-5.5"', model: pinball-claude-haiku-5.5}
+            - {when: 'default(extauthz.model, "") == "gemini-3.8-flash"', model: pinball-gemini-3.8-flash}
+            - {when: 'default(extauthz.model, "") == "claude-sonnet-5.5"', model: pinball-claude-sonnet-5.5}
+            - {when: 'default(extauthz.model, "") == "claude-opus-5.5"', model: pinball-claude-opus-5.5}
+            - {model: pinball-claude-sonnet-5.5}
+    - name: pinball
+      routing: *pinball_routing
 
   models:
-    pinball-claude-haiku-5.5:
+    - name: pinball-claude-haiku-5.5
       visibility: internal
 {{- if eq .Config.Provider "copilot" }}
-      provider: copilot-proxy
-      model: claude-haiku-5.5
+      provider: {reference: copilot-completions}
+      params: {model: claude-haiku-5.5}
 {{- else if eq .Config.Provider "ollama" }}
-      provider: ollama-local
-      model: qwen2.5-coder:7b
+      provider: {reference: ollama-local}
+      params: {model: qwen2.5-coder:7b}
 {{- else }}
-      provider: anthropic
-      model: claude-3-5-haiku-latest
+      provider: {reference: anthropic-direct}
+      params: {model: claude-3-5-haiku-latest}
 {{- end }}
 
-    pinball-gemini-3.8-flash:
+    - name: pinball-gemini-3.8-flash
       visibility: internal
 {{- if eq .Config.Provider "copilot" }}
-      provider: copilot-proxy
-      model: gemini-3.8-flash
+      provider: {reference: copilot-completions}
+      params: {model: gemini-3.8-flash}
 {{- else if eq .Config.Provider "ollama" }}
-      provider: ollama-local
-      model: llama3.2:latest
+      provider: {reference: ollama-local}
+      params: {model: llama3.2:latest}
 {{- else }}
-      provider: openai
-      model: gpt-4o-mini
+      provider: {reference: openai-direct}
+      params: {model: gpt-4o-mini}
 {{- end }}
 
-    pinball-claude-sonnet-5.5:
+    - name: pinball-claude-sonnet-5.5
       visibility: internal
 {{- if eq .Config.Provider "copilot" }}
-      provider: copilot-proxy
-      model: claude-sonnet-5.5
+      provider: {reference: copilot-completions}
+      params: {model: claude-sonnet-5.5}
 {{- else if eq .Config.Provider "ollama" }}
-      provider: ollama-local
-      model: qwen2.5-coder:14b
+      provider: {reference: ollama-local}
+      params: {model: qwen2.5-coder:14b}
 {{- else }}
-      provider: anthropic
-      model: claude-3-5-sonnet-latest
+      provider: {reference: anthropic-direct}
+      params: {model: claude-3-5-sonnet-latest}
 {{- end }}
 
-    pinball-claude-opus-5.5:
+    - name: pinball-claude-opus-5.5
       visibility: internal
 {{- if eq .Config.Provider "copilot" }}
-      provider: copilot-proxy
-      model: claude-opus-5.5
+      provider: {reference: copilot-completions}
+      params: {model: claude-opus-5.5}
 {{- else if eq .Config.Provider "ollama" }}
-      provider: ollama-local
-      model: qwen2.5-coder:32b
+      provider: {reference: ollama-local}
+      params: {model: qwen2.5-coder:32b}
 {{- else }}
-      provider: anthropic
-      model: claude-3-opus-latest
+      provider: {reference: anthropic-direct}
+      params: {model: claude-3-opus-latest}
 {{- end }}
