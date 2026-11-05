@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Kubernetes mode: agentgateway is started with `--file` instead of `-f`; with `-f` v1.6.0 exits in-cluster (`configuration is required when running in Kubernetes`).
+
 ## [0.1.0] - 2026-11-05
 
 ### Added
