@@ -14,7 +14,9 @@ gateways:
       conditional:
         - condition: 'request.method == "POST" && !request.path.endsWith("/embeddings")'
           host: "stand-in:9101"
-          failureMode: failOpen
+          # failClosed (default): Stand-In down => request rejected, nothing
+          # unscrubbed leaves. failOpen only with `init --fail-open`.
+          failureMode: {{ if .Config.FailOpen }}failOpen{{ else }}failClosed{{ end }}
           processingOptions:
             requestHeaderMode: send
             responseHeaderMode: send
@@ -33,6 +35,9 @@ llm:
       conditional:
         - condition: 'request.method == "POST" && json(request.body).model in ["auto", "pinball"]'
           host: "pinball:9201"
+          # allow on purpose: if Pinball is down the request routes to the
+          # fallback target. That only affects model choice, never confidentiality
+          # (scrubbing is the ext_proc above).
           failureMode: allow
           includeRequestBody: {maxRequestBytes: 16777216}
           includeRequestHeaders: [content-type, x-pinball-tier, x-pinball-min-tier, x-agw-caller]
@@ -61,78 +66,37 @@ llm:
       params:
         baseUrl: {{ .Config.OllamaURL }}
 {{- else }}
+{{- if .Models.UsesFamily "openai" }}
     - name: openai-direct
       provider: openAI
       params:
         apiKey: "$OPENAI_API_KEY"
+{{- end }}
+{{- if .Models.UsesFamily "anthropic" }}
     - name: anthropic-direct
       provider: anthropic
       params:
         apiKey: "$ANTHROPIC_API_KEY"
 {{- end }}
+{{- end }}
 
+  # Generated from internal/models (override: ~/.convergence/models.yaml).
   virtualModels:
     - name: auto
       routing: &pinball_routing
         conditional:
           targets:
-            - {when: 'default(extauthz.model, "") == "claude-haiku-5.5"', model: pinball-claude-haiku-5.5}
-            - {when: 'default(extauthz.model, "") == "gemini-3.8-flash"', model: pinball-gemini-3.8-flash}
-            - {when: 'default(extauthz.model, "") == "claude-sonnet-5.5"', model: pinball-claude-sonnet-5.5}
-            - {when: 'default(extauthz.model, "") == "claude-opus-5.5"', model: pinball-claude-opus-5.5}
-            - {model: pinball-claude-sonnet-5.5}
+{{- range .Models.Models }}
+            - {when: 'default(extauthz.model, "") == "{{ .PinballName }}"', model: pinball-{{ .PinballName }}}
+{{- end }}
+            - {model: pinball-{{ .Models.Fallback }}}
     - name: pinball
       routing: *pinball_routing
 
   models:
-    - name: pinball-claude-haiku-5.5
+{{- range .Models.Models }}
+    - name: pinball-{{ .PinballName }}
       visibility: internal
-{{- if eq .Config.Provider "copilot" }}
-      provider: {reference: copilot-completions}
-      params: {model: claude-haiku-5.5}
-{{- else if eq .Config.Provider "ollama" }}
-      provider: {reference: ollama-local}
-      params: {model: qwen2.5-coder:7b}
-{{- else }}
-      provider: {reference: anthropic-direct}
-      params: {model: claude-3-5-haiku-latest}
-{{- end }}
-
-    - name: pinball-gemini-3.8-flash
-      visibility: internal
-{{- if eq .Config.Provider "copilot" }}
-      provider: {reference: copilot-completions}
-      params: {model: gemini-3.8-flash}
-{{- else if eq .Config.Provider "ollama" }}
-      provider: {reference: ollama-local}
-      params: {model: llama3.2:latest}
-{{- else }}
-      provider: {reference: openai-direct}
-      params: {model: gpt-4o-mini}
-{{- end }}
-
-    - name: pinball-claude-sonnet-5.5
-      visibility: internal
-{{- if eq .Config.Provider "copilot" }}
-      provider: {reference: copilot-completions}
-      params: {model: claude-sonnet-5.5}
-{{- else if eq .Config.Provider "ollama" }}
-      provider: {reference: ollama-local}
-      params: {model: qwen2.5-coder:14b}
-{{- else }}
-      provider: {reference: anthropic-direct}
-      params: {model: claude-3-5-sonnet-latest}
-{{- end }}
-
-    - name: pinball-claude-opus-5.5
-      visibility: internal
-{{- if eq .Config.Provider "copilot" }}
-      provider: {reference: copilot-completions}
-      params: {model: claude-opus-5.5}
-{{- else if eq .Config.Provider "ollama" }}
-      provider: {reference: ollama-local}
-      params: {model: qwen2.5-coder:32b}
-{{- else }}
-      provider: {reference: anthropic-direct}
-      params: {model: claude-3-opus-latest}
-{{- end }}
+      provider: {reference: {{ providerRef .UpstreamProvider }}}
+      params: {model: {{ .UpstreamModel }}}
+{{ end }}

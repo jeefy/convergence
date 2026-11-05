@@ -54,8 +54,15 @@ type Config struct {
 	CopilotToken string       `yaml:"copilot_token,omitempty"`
 	OpenAIKey    string       `yaml:"openai_key,omitempty"`
 	AnthropicKey string       `yaml:"anthropic_key,omitempty"`
-	GeminiKey    string       `yaml:"gemini_key,omitempty"`
 	OllamaURL    string       `yaml:"ollama_url,omitempty"`
+	// FailOpen lets requests continue UNSCRUBBED when Stand-In is down.
+	// Default false: the gateway rejects them (fail-closed).
+	FailOpen bool `yaml:"fail_open,omitempty"`
+	// Ollama model overrides per tier ("" = internal/models default).
+	// ~/.convergence/models.yaml wins over these.
+	OllamaModelLight    string `yaml:"ollama_model_light,omitempty"`
+	OllamaModelStandard string `yaml:"ollama_model_standard,omitempty"`
+	OllamaModelHeavy    string `yaml:"ollama_model_heavy,omitempty"`
 }
 
 // NamedPort is a host port the stack publishes, with the service that owns it.
@@ -182,7 +189,7 @@ func SaveConfig(cfg *Config) error {
 	}
 	// 0755: the directory also holds non-secret files bind-mounted into
 	// containers; config.yaml and .env themselves stay 0600.
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: dir holds non-secret files bind-mounted into containers (see comment)
 		return fmt.Errorf("creating config dir: %w", err)
 	}
 

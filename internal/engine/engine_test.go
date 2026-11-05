@@ -1,0 +1,222 @@
+package engine
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+const script = `#!/bin/sh
+echo "$@" >> "$FAKE_LOG"
+case "$*" in *" ps "*) echo "gw"; echo "pb"; exit 0;; esac
+[ -n "$FAKE_FAIL" ] && case "$*" in *"$FAKE_FAIL"*) echo boom >&2; exit 3;; esac
+exit 0
+`
+
+func fakeBins(t *testing.T, names ...string) string {
+	t.Helper()
+	bin := t.TempDir()
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(bin, n), []byte(script), 0o700); err != nil { //nolint:gosec // test executable; G703 false positive
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("FAKE_LOG", filepath.Join(t.TempDir(), "log"))
+	t.Setenv("FAKE_FAIL", "")
+	return bin
+}
+
+func logOf(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(os.Getenv("FAKE_LOG")) //nolint:gosec // test-controlled path
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestDetectEngine_order(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		installed []string
+		preferred string
+		want      string
+	}{
+		{"preferred wins", []string{"docker", "podman"}, "podman", "podman"},
+		{"docker before podman", []string{"docker", "podman"}, "", "docker"},
+		{"podman fallback", []string{"podman"}, "", "podman"},
+		{"preferred missing falls back", []string{"docker"}, "podman", "docker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeBins(t, tc.installed...)
+			e, err := DetectEngine(tc.preferred)
+			if err != nil || e.Name() != tc.want {
+				t.Fatalf("got %v, %v want %s", e, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCompose_commandSelection(t *testing.T) {
+	fakeBins(t, "podman")
+	e, err := DetectEngine("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	ctx := t.Context()
+	for name, fn := range map[string]func(context.Context, string) error{
+		"up -d":                    e.Start,
+		"down":                     e.Stop,
+		"restart":                  e.Restart,
+		"down -v --remove-orphans": e.Down,
+		"pull":                     e.Pull,
+	} {
+		if err := fn(ctx, dir); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if err := e.Logs(ctx, dir, true, "pinball"); err != nil {
+		t.Fatal(err)
+	}
+	got := logOf(t)
+	f := filepath.Join(dir, "docker-compose.yaml")
+	for _, want := range []string{
+		"compose -f " + f + " up -d", "compose -f " + f + " restart", "down -v --remove-orphans",
+		"pull", "logs -f pinball",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+}
+
+func TestCompose_errorWrapping(t *testing.T) {
+	fakeBins(t, "docker")
+	t.Setenv("FAKE_FAIL", "compose")
+	e, err := DetectEngine("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for name, err := range map[string]error{
+		"start":   e.Start(t.Context(), dir),
+		"pull":    e.Pull(t.Context(), dir),
+		"logs":    e.Logs(t.Context(), dir, false),
+		"restart": e.Restart(t.Context(), dir),
+	} {
+		if err == nil || !strings.Contains(err.Error(), "docker compose") || !strings.Contains(err.Error(), "failed") {
+			t.Errorf("%s: %v", name, err)
+		}
+		if !strings.Contains(err.Error(), "exit status 3") {
+			t.Errorf("%s: cause not wrapped: %v", name, err)
+		}
+	}
+	if err := e.Start(t.Context(), dir); !strings.Contains(err.Error(), "boom") {
+		t.Errorf("output not included: %v", err)
+	}
+	if _, err := e.RunningServices(t.Context(), dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunningServices(t *testing.T) {
+	fakeBins(t, "docker")
+	e, err := DetectEngine("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.RunningServices(t.Context(), t.TempDir())
+	if err != nil || len(got) != 2 || got[0] != "gw" {
+		t.Fatalf("got %v %v", got, err)
+	}
+	t.Setenv("FAKE_FAIL", "never")
+	bad := &ComposeEngine{binary: filepath.Join(t.TempDir(), "missing")}
+	if _, err := bad.RunningServices(t.Context(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "ps failed") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestPortConflictError_unwrapsAndNamesPort(t *testing.T) {
+	inner := errors.New("bind: address already in use")
+	err := &PortConflictError{Service: "pinball", Addr: "127.0.0.1:9201", Err: inner}
+	if !errors.Is(err, inner) || !strings.Contains(err.Error(), "127.0.0.1:9201") || !strings.Contains(err.Error(), "pinball") {
+		t.Errorf("bad: %v", err)
+	}
+}
+
+func TestCheckHealth(t *testing.T) {
+	status := http.StatusOK
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(status)
+	}))
+	defer srv.Close()
+	host, ps, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(ps)
+	e := &ComposeEngine{binary: "docker"}
+
+	if err := e.CheckHealth(t.Context(), host, port); err != nil {
+		t.Fatal(err)
+	}
+	status = http.StatusServiceUnavailable
+	if err := e.CheckHealth(t.Context(), host, port); err == nil || !strings.Contains(err.Error(), "503") {
+		t.Fatalf("got %v", err)
+	}
+	if err := e.CheckHealth(t.Context(), "127.0.0.1", 1); err == nil || !strings.Contains(err.Error(), "connection failed") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWaitHealthy_timesOutWithLastError(t *testing.T) {
+	e := &ComposeEngine{binary: "docker"}
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	err := e.WaitHealthy(ctx, "127.0.0.1", 1)
+	if err == nil || !strings.Contains(err.Error(), "not healthy") || !strings.Contains(err.Error(), "connection failed") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWaitHealthy_succeedsAfterRetry(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < 2 {
+			w.WriteHeader(http.StatusBadGateway)
+		}
+	}))
+	defer srv.Close()
+	host, ps, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	port, _ := strconv.Atoi(ps)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	if err := (&ComposeEngine{binary: "docker"}).WaitHealthy(ctx, host, port); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCheckPortsFree_stopsAtFirstConflict(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	taken := ln.Addr().(*net.TCPAddr).Port
+	err = CheckPortsFree("127.0.0.1", namedPorts(taken))
+	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(taken)) {
+		t.Fatalf("got %v", err)
+	}
+}

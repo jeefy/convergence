@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/models"
 )
 
 //go:embed assets/*
@@ -42,6 +43,8 @@ type RenderContext struct {
 	Config *config.Config
 	Images Images
 	Ports  HostPorts
+	// Models is the resolved tier/model mapping (internal/models).
+	Models *models.Resolved
 	// VolumeSuffix adds a shared SELinux relabel on Linux so rootless podman
 	// (and docker on SELinux hosts) can read the bind-mounted configs.
 	VolumeSuffix string
@@ -65,9 +68,10 @@ func VolumeSuffix() string {
 	return ""
 }
 
-func newContext(cfg *config.Config) RenderContext {
+func newContext(cfg *config.Config, res *models.Resolved) RenderContext {
 	return RenderContext{
 		Config: cfg,
+		Models: res,
 		Images: PinnedImages,
 		Ports: HostPorts{
 			GatewayStats:   config.GatewayStatsPort,
@@ -90,13 +94,17 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 		return fmt.Errorf("chmod target dir: %w", err)
 	}
 
-	ctx := newContext(cfg)
+	res, err := models.ForConfig(cfg, targetDir)
+	if err != nil {
+		return err
+	}
+	ctx := newContext(cfg, res)
 	for _, file := range publicFiles {
 		data, err := assetsFS.ReadFile("assets/" + file + ".tmpl")
 		if err != nil {
 			return fmt.Errorf("reading template %s: %w", file, err)
 		}
-		tmpl, err := template.New(file).Option("missingkey=error").Parse(string(data))
+		tmpl, err := template.New(file).Funcs(template.FuncMap{"providerRef": providerRef}).Option("missingkey=error").Parse(string(data))
 		if err != nil {
 			return fmt.Errorf("parsing template %s: %w", file, err)
 		}
@@ -141,4 +149,20 @@ func writeFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("chmod %s: %w", path, err)
 	}
 	return nil
+}
+
+// providerRef maps an internal/models upstream family to the provider name
+// declared in agentgateway.yaml.tmpl.
+func providerRef(family string) (string, error) {
+	switch family {
+	case models.UpstreamCopilot:
+		return "copilot-completions", nil
+	case models.UpstreamOllama:
+		return "ollama-local", nil
+	case models.UpstreamOpenAI:
+		return "openai-direct", nil
+	case models.UpstreamAnthropic:
+		return "anthropic-direct", nil
+	}
+	return "", fmt.Errorf("unknown upstream family %q", family)
 }

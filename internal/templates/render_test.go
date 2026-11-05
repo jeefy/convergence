@@ -93,7 +93,7 @@ func TestRenderHonorsBindAddressAndPort(t *testing.T) {
 	if !strings.Contains(files[ComposeFile], `"0.0.0.0:8080:3000"`) {
 		t.Errorf("compose missing 0.0.0.0:8080:3000")
 	}
-	if strings.Contains(files[ComposeFile], "127.0.0.1:") {
+	if strings.Contains(files[ComposeFile], `"127.0.0.1:`) {
 		t.Errorf("compose still binds loopback")
 	}
 }
@@ -137,5 +137,73 @@ func TestAgentgatewayOnlyReferencesProvidedEnv(t *testing.T) {
 		if !allowed[m] {
 			t.Errorf("unexpected env reference %s in agentgateway.yaml", m)
 		}
+	}
+}
+
+func TestFailClosedByDefaultAndFailOpenOptIn(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	ag := files["agentgateway.yaml"]
+	if !strings.Contains(ag, "failureMode: failClosed") || strings.Contains(ag, "failureMode: failOpen") {
+		t.Errorf("default must be failClosed:\n%s", ag)
+	}
+	if !strings.Contains(ag, "failureMode: allow") {
+		t.Errorf("pinball ext_authz must stay allow")
+	}
+	_, files = render(t, func(c *config.Config) { c.FailOpen = true })
+	if !strings.Contains(files["agentgateway.yaml"], "failureMode: failOpen") {
+		t.Errorf("fail_open must render failOpen")
+	}
+}
+
+// Model names/ids come only from internal/models: a models.yaml override must
+// show up in both generated files, and the defaults of other providers must not.
+func TestTemplatesDrivenByModels(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderOllama })
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte("ollama:\n  claude-haiku-5.5: tiny:1b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderOllama
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	ag, _ := os.ReadFile(filepath.Join(dir, "agentgateway.yaml"))
+	pb, _ := os.ReadFile(filepath.Join(dir, "pinball.yaml"))
+	if !strings.Contains(string(ag), "params: {model: tiny:1b}") {
+		t.Errorf("override missing from agentgateway.yaml")
+	}
+	for _, f := range []string{string(ag), string(pb)} {
+		for _, stale := range []string{"gemini", "gpt-4o", "claude-3", "llama3.2"} {
+			if strings.Contains(f, stale) {
+				t.Errorf("stale hardcoded name %q rendered", stale)
+			}
+		}
+	}
+	for _, want := range []string{"light: [claude-haiku-5.5]", "standard: [claude-sonnet-5.5]", "heavy: [claude-opus-5.5]", "standard: 1", "heavy: 3"} {
+		if !strings.Contains(string(pb), want) {
+			t.Errorf("pinball.yaml missing %q:\n%s", want, pb)
+		}
+	}
+}
+
+func TestMissingMappingFailsRender(t *testing.T) {
+	cfg := config.DefaultConfig()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte("gemini:\n  x: y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenderAssets(cfg, dir); err == nil {
+		t.Fatal("gemini override must fail rendering")
+	}
+}
+
+func TestComposeHasLoggingAndHealthDeps(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	c := files[ComposeFile]
+	if n := strings.Count(c, "max-size"); n != 4 {
+		t.Errorf("logging on %d services, want 4", n)
+	}
+	if n := strings.Count(c, "condition: service_healthy"); n != 3 {
+		t.Errorf("healthy deps %d, want 3", n)
 	}
 }

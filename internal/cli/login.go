@@ -22,10 +22,15 @@ import (
 const (
 	copilotClientID   = "Iv1.b507a08c87ecfe98"
 	copilotScope      = "read:user"
-	githubDeviceURL   = "https://github.com/login/device/code"
-	githubTokenURL    = "https://github.com/login/oauth/access_token"
-	deviceGrantType   = "urn:ietf:params:oauth:grant-type:device_code"
+	deviceGrantType   = "urn:ietf:params:oauth:grant-type:device_code" //nolint:gosec // G101 false positive: OAuth grant-type URN
 	deviceHTTPTimeout = 15 * time.Second
+)
+
+// Endpoints and minimum poll interval are vars so tests can point at httptest.
+var (
+	githubDeviceURL  = "https://github.com/login/device/code"
+	githubTokenURL   = "https://github.com/login/oauth/access_token" //nolint:gosec // G101 false positive: public OAuth endpoint URL
+	deviceMinPollSec = 5
 )
 
 type deviceCode struct {
@@ -54,7 +59,7 @@ func postForm(ctx context.Context, endpoint string, form url.Values, out any) er
 	if err != nil {
 		return fmt.Errorf("POST %s: %w", endpoint, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-only response body
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("POST %s: status %d", endpoint, resp.StatusCode)
 	}
@@ -74,7 +79,7 @@ func githubDeviceLogin(ctx context.Context) (string, error) {
 
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(dc.ExpiresIn)*time.Second)
 	defer cancel()
-	interval := time.Duration(max(dc.Interval, 5)) * time.Second
+	interval := time.Duration(max(dc.Interval, deviceMinPollSec)) * time.Second
 	form := url.Values{"client_id": {copilotClientID}, "device_code": {dc.DeviceCode}, "grant_type": {deviceGrantType}}
 	for {
 		select {
@@ -94,7 +99,7 @@ func githubDeviceLogin(ctx context.Context) (string, error) {
 			return tr.AccessToken, nil
 		case "authorization_pending":
 		case "slow_down":
-			interval = time.Duration(max(tr.Interval, int(interval/time.Second)+5)) * time.Second
+			interval = time.Duration(max(tr.Interval, int(interval/time.Second)+deviceMinPollSec)) * time.Second
 		default:
 			return "", fmt.Errorf("GitHub device flow failed: %s (%s)", tr.Error, tr.Description)
 		}

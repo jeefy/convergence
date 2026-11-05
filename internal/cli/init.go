@@ -27,6 +27,10 @@ type initFlags struct {
 	ollamaURL    string
 	port         int
 	bindAddress  string
+	failOpen     bool
+	ollamaLight  string
+	ollamaStd    string
+	ollamaHeavy  string
 }
 
 var initOpts initFlags
@@ -40,7 +44,7 @@ type prompter struct {
 
 // ask prints question and returns the trimmed answer ("" on EOF).
 func (p *prompter) ask(question string) (string, error) {
-	fmt.Fprint(p.out, question)
+	_, _ = fmt.Fprint(p.out, question)
 	line, err := p.in.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("reading input: %w", err)
@@ -104,10 +108,10 @@ func (p *prompter) chooseProvider(flagVal string, current config.ProviderType) (
 			def = fmt.Sprint(i + 1)
 		}
 	}
-	fmt.Fprintln(p.out, "Select your primary LLM backend:")
-	fmt.Fprintln(p.out, "  [1] GitHub Copilot (Subscription token)")
-	fmt.Fprintln(p.out, "  [2] Direct API Keys (OpenAI / Anthropic)")
-	fmt.Fprintln(p.out, "  [3] Local Only (Ollama)")
+	_, _ = fmt.Fprintln(p.out, "Select your primary LLM backend:")
+	_, _ = fmt.Fprintln(p.out, "  [1] GitHub Copilot (Subscription token)")
+	_, _ = fmt.Fprintln(p.out, "  [2] Direct API Keys (OpenAI / Anthropic)")
+	_, _ = fmt.Fprintln(p.out, "  [3] Local Only (Ollama)")
 	ans, err := p.ask(fmt.Sprintf("Enter choice [1-3] (default %s): ", def))
 	if err != nil {
 		return "", err
@@ -139,6 +143,18 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 	}
 	if f.bindAddress != "" {
 		cfg.BindAddress = f.bindAddress
+	}
+	if f.failOpen {
+		cfg.FailOpen = true
+	}
+	if f.ollamaLight != "" {
+		cfg.OllamaModelLight = f.ollamaLight
+	}
+	if f.ollamaStd != "" {
+		cfg.OllamaModelStandard = f.ollamaStd
+	}
+	if f.ollamaHeavy != "" {
+		cfg.OllamaModelHeavy = f.ollamaHeavy
 	}
 
 	switch provider {
@@ -223,6 +239,10 @@ prompts and confirmations).`,
 		if err != nil {
 			return err
 		}
+		// Starter models.yaml is written only when absent (never clobbered).
+		if err := writeStarterModels(dir); err != nil {
+			return err
+		}
 		if err := templates.RenderAssets(cfg, dir); err != nil {
 			return fmt.Errorf("rendering templates: %w", err)
 		}
@@ -230,6 +250,9 @@ prompts and confirmations).`,
 		fmt.Println("\nConfiguration rendered successfully to:", dir)
 		if cfg.Provider == config.ProviderCopilot && cfg.CopilotToken == "" {
 			fmt.Println("No Copilot token yet: run 'convergence login copilot' before starting.")
+		}
+		if cfg.FailOpen {
+			fmt.Println("WARNING: --fail-open is on: if Stand-In is down, requests go upstream UNSCRUBBED.")
 		}
 		fmt.Println("Run 'convergence start' to launch your gateway.")
 		return nil
@@ -245,6 +268,10 @@ func init() {
 	f.StringVar(&initOpts.openAIKey, "openai-key", "", "OpenAI API key (direct provider)")
 	f.StringVar(&initOpts.anthropicKey, "anthropic-key", "", "Anthropic API key (direct provider)")
 	f.StringVar(&initOpts.ollamaURL, "ollama-url", "", "Ollama base URL (ollama provider)")
+	f.BoolVar(&initOpts.failOpen, "fail-open", false, "If Stand-In is down, let requests continue UNSCRUBBED to the upstream (default: fail closed, reject them)")
+	f.StringVar(&initOpts.ollamaLight, "ollama-model-light", "", "Ollama model for the light tier (default from 'convergence models')")
+	f.StringVar(&initOpts.ollamaStd, "ollama-model-standard", "", "Ollama model for the standard tier")
+	f.StringVar(&initOpts.ollamaHeavy, "ollama-model-heavy", "", "Ollama model for the heavy tier")
 	f.IntVar(&initOpts.port, "port", 0, "Host port for the gateway (default 3000)")
 	f.StringVar(&initOpts.bindAddress, "bind-address", "", "Host address to publish ports on (default 127.0.0.1; 0.0.0.0 exposes to the network)")
 	rootCmd.AddCommand(initCmd)

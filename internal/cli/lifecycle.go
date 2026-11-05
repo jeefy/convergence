@@ -5,16 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/engine"
+	"github.com/jeefy/convergence/internal/models"
 	"github.com/jeefy/convergence/internal/templates"
 )
 
-const healthTimeout = 90 * time.Second
+// healthTimeout is a var so tests can shorten it.
+var healthTimeout = 90 * time.Second
 
 // stack bundles what every lifecycle command needs.
 type stack struct {
@@ -87,11 +90,53 @@ func (s *stack) up(ctx context.Context) error {
 			return err
 		}
 	}
+	if s.cfg.Provider == config.ProviderOllama {
+		if err := s.checkOllama(ctx); err != nil {
+			return err
+		}
+	}
 	fmt.Printf("Starting Convergence services with %s...\n", s.eng.Name())
 	if err := s.eng.Start(ctx, s.dir); err != nil {
 		return err
 	}
 	return s.waitHealthy(ctx)
+}
+
+// checkOllama warns (or fails with --strict) about mapped models Ollama lacks.
+func (s *stack) checkOllama(ctx context.Context) error {
+	res, err := models.ForConfig(s.cfg, s.dir)
+	if err != nil {
+		return err
+	}
+	var wanted []string
+	for _, m := range res.Models {
+		wanted = append(wanted, m.UpstreamModel)
+	}
+	// The gateway container reaches the host as host.docker.internal; from
+	// here that name usually does not resolve, so probe loopback instead.
+	url := strings.Replace(s.cfg.OllamaURL, "host.docker.internal", "127.0.0.1", 1)
+	missing, err := engine.OllamaMissing(ctx, url, wanted)
+	if err != nil {
+		msg := fmt.Sprintf("cannot check Ollama models: %v (is Ollama running?)", err)
+		if startStrict {
+			return errors.New(msg)
+		}
+		fmt.Fprintln(os.Stderr, "WARNING: "+msg)
+		return nil
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	b.WriteString("Ollama is missing mapped models; pull them with:\n")
+	for _, m := range missing {
+		fmt.Fprintf(&b, "  ollama pull %s\n", m)
+	}
+	if startStrict {
+		return errors.New(strings.TrimSpace(b.String()))
+	}
+	fmt.Fprint(os.Stderr, "WARNING: "+b.String())
+	return nil
 }
 
 func (s *stack) waitHealthy(ctx context.Context) error {
@@ -106,6 +151,8 @@ func (s *stack) waitHealthy(ctx context.Context) error {
 	fmt.Println("API Key:  convergence (or any non-empty string)")
 	return nil
 }
+
+var startStrict bool
 
 var startCmd = &cobra.Command{
 	Use:   "start",
@@ -135,35 +182,7 @@ var stopCmd = &cobra.Command{
 	},
 }
 
-var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Check the status of Convergence services",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := loadStack()
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
-		defer cancel()
-
-		fmt.Println("=== Convergence Status ===")
-		fmt.Printf("Container Engine: %s\n", s.eng.Name())
-		fmt.Printf("Active Provider:  %s\n", s.cfg.Provider)
-		fmt.Printf("Gateway Endpoint: http://%s:%d/v1\n", s.cfg.HealthHost(), s.cfg.GatewayPort)
-		if running, err := s.eng.RunningServices(ctx, s.dir); err != nil {
-			fmt.Printf("Services:         unknown (%v)\n", err)
-		} else {
-			fmt.Printf("Services:         %d running %v\n", len(running), running)
-		}
-		if err := s.eng.CheckHealth(ctx, s.cfg.HealthHost(), s.cfg.GatewayPort); err != nil {
-			fmt.Printf("Health:           DOWN (%v)\n", err)
-		} else {
-			fmt.Printf("Health:           ONLINE (200 OK)\n")
-		}
-		return nil
-	},
-}
-
 func init() {
-	rootCmd.AddCommand(startCmd, stopCmd, statusCmd)
+	startCmd.Flags().BoolVar(&startStrict, "strict", false, "Fail (instead of warn) when Ollama lacks a mapped model or is unreachable")
+	rootCmd.AddCommand(startCmd, stopCmd)
 }

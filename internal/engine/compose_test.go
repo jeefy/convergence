@@ -14,7 +14,7 @@ func TestCheckPortsFree_when_portTaken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	port := ln.Addr().(*net.TCPAddr).Port
 
 	err = CheckPortsFree("127.0.0.1", []config.NamedPort{{Name: "pinball", Port: port}})
@@ -34,7 +34,7 @@ func TestCheckPortsFree_when_portFree(t *testing.T) {
 		t.Fatal(err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close() // freeing the port is the point
 
 	if err := CheckPortsFree("127.0.0.1", []config.NamedPort{{Name: "gw", Port: port}}); err != nil {
 		t.Fatalf("expected free port, got %v", err)

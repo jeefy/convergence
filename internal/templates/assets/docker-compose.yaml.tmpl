@@ -19,10 +19,20 @@ services:
       - ./agentgateway.yaml:/etc/agentgateway/agentgateway.yaml:ro{{ .VolumeSuffix }}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # No healthcheck for agentgateway itself: the image is distroless (no
+    # shell, wget or curl). `convergence status` probes it over its port.
     depends_on:
-      - stand-in
-      - pinball{{ if eq .Config.Provider "copilot" }}
-      - copilot-api{{ end }}
+      stand-in:
+        condition: service_healthy
+      pinball:
+        condition: service_healthy{{ if eq .Config.Provider "copilot" }}
+      copilot-api:
+        condition: service_healthy{{ end }}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   stand-in:
     image: {{ .Images.StandIn }}
@@ -34,6 +44,18 @@ services:
       STANDIN_METRICS_PORT: "9102"
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.StandinMetrics }}:9102"
+    # The image ships python3 (no wget/curl); /metrics is on :9102.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9102/metrics', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   pinball:
     image: {{ .Images.Pinball }}
@@ -42,6 +64,17 @@ services:
       - ./pinball.yaml:/etc/pinball/pinball.yaml:ro{{ .VolumeSuffix }}
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.Pinball }}:9201"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9201/healthz', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 {{- if eq .Config.Provider "copilot" }}
 
   copilot-api:
@@ -55,6 +88,18 @@ services:
       - copilot-data:/root/.local/share/copilot-api
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.CopilotAPI }}:4141"
+    # busybox wget exists in this image; "/" answers 200 once the server is up.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4141/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   copilot-data:

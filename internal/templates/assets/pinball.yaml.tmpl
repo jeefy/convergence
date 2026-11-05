@@ -1,13 +1,13 @@
-# Schema of ghcr.io/jeefy/pinball:0.7.2 (heavy tier, thresholds, prompt_tokens).
+# Schema of ghcr.io/jeefy/pinball:0.7.2. Generated from internal/models
+# (override upstream mapping in ~/.convergence/models.yaml).
 models:
-  claude-haiku-5.5: {prompt_tokens: 200000}
-  gemini-3.8-flash: {prompt_tokens: 1000000}
-  claude-sonnet-5.5: {prompt_tokens: 200000}
-  claude-opus-5.5: {prompt_tokens: 200000}
+{{- range .Models.Models }}
+  {{ .PinballName }}: {prompt_tokens: {{ .PromptTokens }}}
+{{- end }}
 tiers:
-  light: [claude-haiku-5.5]
-  standard: [gemini-3.8-flash, claude-sonnet-5.5]
-  heavy: [claude-opus-5.5]
+  light: [{{ .Models.TierList "light" }}]
+  standard: [{{ .Models.TierList "standard" }}]
+  heavy: [{{ .Models.TierList "heavy" }}]
 thresholds:
-  standard: 1
-  heavy: 5
+  standard: {{ .Models.Thresholds.Standard }}
+  heavy: {{ .Models.Thresholds.Heavy }}

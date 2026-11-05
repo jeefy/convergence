@@ -146,7 +146,7 @@ func (e *ComposeEngine) CheckHealth(ctx context.Context, host string, port int) 
 	if err != nil {
 		return fmt.Errorf("gateway connection failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-only response body
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gateway returned status %d", resp.StatusCode)
 	}
