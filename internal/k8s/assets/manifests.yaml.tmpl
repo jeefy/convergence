@@ -148,7 +148,7 @@ metadata:
   namespace: {{ .Namespace }}
 data:
   pinball.yaml: |
-    # Schema of ghcr.io/jeefy/pinball:0.7.3 (heavy tier, thresholds, prompt_tokens).
+    # Schema of ghcr.io/jeefy/pinball:0.7.4 (heavy tier, thresholds, prompt_tokens).
     models:
 {{- range .Entries }}
       {{ .Name }}: {prompt_tokens: {{ .PromptTokens }}}

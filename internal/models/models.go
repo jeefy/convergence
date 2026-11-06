@@ -50,7 +50,7 @@ type Resolved struct {
 	Fallback string
 }
 
-// Thresholds are pinball's score cutoffs (pinball 0.7.3 schema).
+// Thresholds are pinball's score cutoffs (pinball 0.7.4 schema).
 type Thresholds struct{ Standard, Heavy int }
 
 // Overrides represents models.yaml configuration.
