@@ -3,8 +3,8 @@
 Convergence runs an AI gateway stack on your workstation or in a Kubernetes cluster and points your coding agents at it. It wires together several projects:
 
 - [agentgateway](https://agentgateway.dev/docs/) (`v1.6.0`): the gateway. It serves an OpenAI-compatible `/v1` endpoint (Anthropic Messages requests are translated) and forwards to your provider.
-- [Stand-In](https://github.com/jeefy/stand-in) (`0.4.1`): an `ext_proc` filter that swaps secrets and credentials in prompts for opaque tokens before they leave your machine, then puts the originals back in responses.
-- [Pinball](https://github.com/jeefy/pinball) (`0.7.3`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
+- [Stand-In](https://github.com/jeefy/stand-in) (`0.6.0`): an `ext_proc` filter that swaps secrets and credentials in prompts for opaque tokens before they leave your machine, then puts the originals back in responses.
+- [Pinball](https://github.com/jeefy/pinball) (`0.7.4`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
 - **Bring Your Own Sandbox**: run your agents inside an isolated runtime while funneling model traffic through the stack. Supported options include [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell) (bundled compose gateway container and supervisor), [nono](https://github.com/nolabs-ai/nono) (zero-daemon kernel isolation via Landlock/Seatbelt), [Docker Sandboxes](https://docs.docker.com/engine/security/sandboxes/) (`sbx`), and Kubernetes [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) (`agents.x-k8s.io`).
 
 Why: you get one endpoint for every agent, secrets scrubbed on the wire, and per-request model routing, without hand-writing gateway config.
