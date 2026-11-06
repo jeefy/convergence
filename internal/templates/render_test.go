@@ -62,6 +62,9 @@ func TestRenderAllProvidersAndEngines(t *testing.T) {
 					t.Errorf(".env missing salt")
 				}
 				hasCopilot := strings.Contains(compose, "copilot-api:")
+				if hasCopilot && !strings.Contains(compose, "./copilot-api-bunfig.toml:/app/bunfig.toml:ro") {
+					t.Errorf("copilot-api must preload the idle-timeout shim")
+				}
 				if hasCopilot != (prov == config.ProviderCopilot) {
 					t.Errorf("copilot-api service present=%v for provider %s", hasCopilot, prov)
 				}

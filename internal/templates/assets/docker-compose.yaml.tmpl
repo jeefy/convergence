@@ -86,6 +86,9 @@ services:
       GH_TOKEN: ${GH_TOKEN:?GH_TOKEN missing from .env; run convergence login copilot}
     volumes:
       - copilot-data:/root/.local/share/copilot-api
+      # Disable Bun's 10s idleTimeout (cuts long streams); see copilot-api-idle-timeout.js.
+      - ./copilot-api-idle-timeout.js:/etc/copilot-api/idle-timeout.js:ro{{ .VolumeSuffix }}
+      - ./copilot-api-bunfig.toml:/app/bunfig.toml:ro{{ .VolumeSuffix }}
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.CopilotAPI }}:4141"
     # busybox wget exists in this image; "/" answers 200 once the server is up.

@@ -479,6 +479,25 @@ spec:
 {{- end }}
 {{- if eq .Provider "copilot" }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: copilot-api-idle-timeout
+  namespace: {{ .Namespace }}
+data:
+  idle-timeout.js: |
+    // Rendered by convergence. Bun.serve defaults idleTimeout to 10s, which cuts
+    // streamed completions whenever Copilot is silent for >10s (long tool calls,
+    // large contexts): copilot-api logs "request timed out after 10 seconds" and
+    // agentgateway waits on a dead upstream. copilot-api v0.7.0 has no flag for it
+    // (upstream: ericc-ch/copilot-api#153, #268), so preload this shim to disable
+    // the idle timeout unless the caller set one explicitly.
+    const serve = Bun.serve.bind(Bun);
+    Bun.serve = (options) => serve({ ...options, idleTimeout: options.idleTimeout ?? 0 });
+  bunfig.toml: |
+    # Rendered by convergence: preload the idle-timeout shim (see idle-timeout.js).
+    preload = ["/etc/copilot-api/idle-timeout.js"]
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -523,6 +542,20 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}
             seccompProfile: {type: RuntimeDefault}
+          # Disable Bun's 10s idleTimeout, which cuts long streamed completions.
+          volumeMounts:
+            - name: idle-timeout
+              mountPath: /etc/copilot-api/idle-timeout.js
+              subPath: idle-timeout.js
+              readOnly: true
+            - name: idle-timeout
+              mountPath: /app/bunfig.toml
+              subPath: bunfig.toml
+              readOnly: true
+      volumes:
+        - name: idle-timeout
+          configMap:
+            name: copilot-api-idle-timeout
 ---
 apiVersion: v1
 kind: Service

@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- copilot-api: disable Bun's 10s `idleTimeout` via a preloaded shim (compose + Kubernetes). Long or silent upstream completions were cut mid-response (`request timed out after 10 seconds`) and agentgateway then waited on a dead upstream. Upstream issue: ericc-ch/copilot-api#153.
+
 ## [0.1.3] - 2026-11-05
 
 ### Added
