@@ -295,3 +295,23 @@ func TestClusterCustomImageOverrides(t *testing.T) {
 		}
 	}
 }
+
+func TestClusterIngressAndPDB(t *testing.T) {
+	opts := &ClusterOptions{
+		Namespace:   "ingress-test",
+		Provider:    "direct",
+		OpenAIKey:   "sk-test",
+		IngressHost: "ai.example.com",
+		EnablePDB:   true,
+	}
+	manifests, err := RenderManifests(opts)
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+	if !strings.Contains(manifests, "kind: Ingress") || !strings.Contains(manifests, "host: ai.example.com") {
+		t.Errorf("missing Ingress resource for ai.example.com")
+	}
+	if !strings.Contains(manifests, "kind: PodDisruptionBudget") || !strings.Contains(manifests, "name: agentgateway-pdb") {
+		t.Errorf("missing PodDisruptionBudget resources")
+	}
+}

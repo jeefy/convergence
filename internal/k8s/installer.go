@@ -27,6 +27,8 @@ type ClusterOptions struct {
 	FailOpen      bool   // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
 	OpenAIBaseURL string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
 	ModelsFile    string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost   string // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB     bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
 	DryRun        bool
 
 	ImageAgentGateway string

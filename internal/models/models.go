@@ -53,9 +53,7 @@ type Resolved struct {
 // Thresholds are pinball's score cutoffs (pinball 0.7.3 schema).
 type Thresholds struct{ Standard, Heavy int }
 
-// Overrides is the parsed ~/.convergence/models.yaml:
-// provider -> pinball model name -> upstream model. For the direct provider a
-// value may be prefixed "openai:" or "anthropic:" (default anthropic).
+// Overrides represents models.yaml configuration.
 type Overrides map[string]map[string]string
 
 // MissingMappingError lists pinball models with no upstream mapping.
@@ -199,24 +197,30 @@ func build(provider config.ProviderType, slots []slot, mapping map[string]string
 }
 
 func splitSpec(provider config.ProviderType, spec string) (family, model string, err error) {
+	fam, m, found := strings.Cut(spec, ":")
+	if found {
+		switch fam {
+		case "anthropic":
+			return UpstreamAnthropic, m, nil
+		case "openai":
+			return UpstreamOpenAI, m, nil
+		case "ollama":
+			return UpstreamOllama, m, nil
+		case "copilot":
+			return UpstreamCopilot, m, nil
+		}
+	}
+
 	switch provider {
 	case config.ProviderCopilot:
 		return UpstreamCopilot, spec, nil
 	case config.ProviderOllama:
 		return UpstreamOllama, spec, nil
 	case config.ProviderDirect:
-		fam, m, found := strings.Cut(spec, ":")
-		if !found {
-			return UpstreamAnthropic, spec, nil
+		if found {
+			return "", "", fmt.Errorf("unsupported upstream family %q (supports anthropic:, openai:, ollama:, copilot:)", fam)
 		}
-		switch fam {
-		case "anthropic":
-			return UpstreamAnthropic, m, nil
-		case "openai":
-			return UpstreamOpenAI, m, nil
-		default:
-			return "", "", fmt.Errorf("unsupported upstream family %q (direct supports anthropic: and openai:; Gemini is not supported in v0.1)", fam)
-		}
+		return UpstreamAnthropic, spec, nil
 	}
 	return "", "", fmt.Errorf("unknown provider %q", provider)
 }
@@ -246,10 +250,12 @@ func validateOverrides(o Overrides) error {
 			if strings.TrimSpace(v) == "" {
 				return fmt.Errorf("models.yaml: %s: empty upstream model for %q", p, name)
 			}
-			if p == "direct" {
-				if _, _, err := splitSpec(config.ProviderDirect, v); err != nil {
-					return fmt.Errorf("models.yaml: %s/%s: %w", p, name, err)
-				}
+			provType, err := config.ParseProvider(p)
+			if err != nil {
+				return fmt.Errorf("models.yaml: %w", err)
+			}
+			if _, _, err := splitSpec(provType, v); err != nil {
+				return fmt.Errorf("models.yaml: %s/%s: %w", p, name, err)
 			}
 		}
 	}
@@ -264,6 +270,14 @@ func (r *Resolved) UsesFamily(family string) bool {
 		}
 	}
 	return false
+}
+
+func (r *Resolved) TierModel(t string) string {
+	models := r.Tiers[Tier(t)]
+	if len(models) == 0 {
+		return ""
+	}
+	return models[0]
 }
 
 // TierList renders a tier's pinball names as "a, b" for a YAML flow list.

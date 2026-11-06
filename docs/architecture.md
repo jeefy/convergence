@@ -88,13 +88,13 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 
 | Component | Image |
 |---|---|
-| agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0` |
-| Stand-In | `ghcr.io/jeefy/stand-in:0.4.1` |
-| Pinball | `ghcr.io/jeefy/pinball:0.7.3` |
-| copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0` |
+| agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2` |
+| Stand-In | `ghcr.io/jeefy/stand-in:0.4.1@sha256:c2216ae305f6dbff3f85e893ff720a177c712a69e8309a6e639afcb23fe05a2c` |
+| Pinball | `ghcr.io/jeefy/pinball:0.7.3@sha256:01c79ee45faa6877c702bc5aacf889cdc77498d50196edc9943068d3d4d1f936` |
+| copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29` |
 | openshell | `ghcr.io/nvidia/openshell/gateway:latest` |
 
-Tags are pinned, digests aren't yet.
+Tags and sha256 digests are pinned for release immutability.
 
 ## Model mapping
 

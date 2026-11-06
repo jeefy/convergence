@@ -22,7 +22,7 @@ var fixtures = []fixture{
 	{"opencode", ".config/opencode/opencode.json",
 		"{\n  // my comment\n  \"model\": \"x/y\",\n  \"provider\": {\n    \"other\": {\"a\": 1,},\n  },\n}\n",
 		[]string{"// my comment", `"model": "x/y"`, `"other": {"a": 1,}`},
-		[]string{`"convergence"`, "http://localhost:3000/v1", "@ai-sdk/openai-compatible", `"pinball"`}, nil},
+		[]string{`"convergence"`, "http://localhost:3000/v1", "@ai-sdk/openai-compatible", `"pinball"`, `"light"`, `"heavy"`}, nil},
 	{"claude-code", ".claude/settings.json",
 		"{\n  // c\n  \"theme\": \"dark\",\n  \"env\": {\"FOO\": \"bar\"}\n}\n",
 		[]string{"// c", `"theme": "dark"`, `"FOO": "bar"`},
@@ -40,6 +40,14 @@ var fixtures = []fixture{
 		"name: Mine\nversion: 2.0.0\nschema: v1\n# c\nmodels:\n  - name: Other\n    provider: ollama\n    model: x\n",
 		[]string{"name: Mine", "# c", "name: Other"},
 		[]string{"Convergence (Auto)", "apiBase: http://localhost:3000/v1"}, nil},
+	{"zed", ".config/zed/settings.json",
+		"{\n  // zed config\n  \"theme\": \"One Dark\"\n}\n",
+		[]string{"// zed config", `"theme": "One Dark"`},
+		[]string{`"api_url": "http://localhost:3000/v1"`, `"Convergence Auto"`}, nil},
+	{"cline", ".config/Code/User/settings.json",
+		"{\n  // vscode config\n  \"editor.fontSize\": 14\n}\n",
+		[]string{"// vscode config", `"editor.fontSize": 14`},
+		[]string{`"cline.openAiBaseUrl": "http://localhost:3000/v1"`, `"cline.openAiApiKey": "convergence"`}, nil},
 }
 
 func setup(t *testing.T, f fixture, withFile bool) string {

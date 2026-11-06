@@ -37,7 +37,10 @@ func TestResolve_defaultsForEveryProvider(t *testing.T) {
 }
 
 func TestResolve_overrideWinsAndDirectFamilies(t *testing.T) {
-	o := Overrides{"direct": {"claude-haiku-5.5": "openai:gpt-6-luna"}, "ollama": {"claude-opus-5.5": "llama3.3:70b"}}
+	o := Overrides{
+		"direct": {"claude-haiku-5.5": "openai:gpt-6-luna", "claude-opus-5.5": "ollama:deepseek-r1:70b"},
+		"ollama": {"claude-opus-5.5": "llama3.3:70b", "claude-haiku-5.5": "openai:gpt-4o-mini"},
+	}
 	r, err := Resolve(config.ProviderDirect, &o)
 	if err != nil {
 		t.Fatal(err)
@@ -45,12 +48,18 @@ func TestResolve_overrideWinsAndDirectFamilies(t *testing.T) {
 	if m := r.Models[0]; m.UpstreamProvider != UpstreamOpenAI || m.UpstreamModel != "gpt-6-luna" {
 		t.Errorf("override ignored: %+v", m)
 	}
-	if !r.UsesFamily("openai") || !r.UsesFamily("anthropic") {
+	if m := r.Models[2]; m.UpstreamProvider != UpstreamOllama || m.UpstreamModel != "deepseek-r1:70b" {
+		t.Errorf("ollama mix in direct ignored: %+v", m)
+	}
+	if !r.UsesFamily("openai") || !r.UsesFamily("anthropic") || !r.UsesFamily("ollama") {
 		t.Error("UsesFamily wrong")
 	}
 	r, _ = Resolve(config.ProviderOllama, &o)
 	if r.Models[2].UpstreamModel != "llama3.3:70b" {
 		t.Errorf("ollama override ignored: %+v", r.Models[2])
+	}
+	if r.Models[0].UpstreamProvider != UpstreamOpenAI {
+		t.Errorf("openai mix in ollama ignored: %+v", r.Models[0])
 	}
 }
 

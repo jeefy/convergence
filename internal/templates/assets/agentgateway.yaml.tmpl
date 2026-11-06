@@ -50,7 +50,7 @@ llm:
                 reason: 'json(response.body).reason'
 
   providers:
-{{- if eq .Config.Provider "copilot" }}
+{{- if or (eq .Config.Provider "copilot") (.Models.UsesFamily "copilot") }}
     - name: copilot-completions
       provider:
         custom:
@@ -60,12 +60,13 @@ llm:
       params:
         baseUrl: http://copilot-api:4141/v1
         apiKey: dummy
-{{- else if eq .Config.Provider "ollama" }}
+{{- end }}
+{{- if or (eq .Config.Provider "ollama") (.Models.UsesFamily "ollama") }}
     - name: ollama-local
       provider: ollama
       params:
         baseUrl: {{ .Config.OllamaURL }}
-{{- else }}
+{{- end }}
 {{- if .Models.UsesFamily "openai" }}
     - name: openai-direct
       provider: openAI
@@ -77,7 +78,6 @@ llm:
       provider: anthropic
       params:
         apiKey: "$ANTHROPIC_API_KEY"
-{{- end }}
 {{- end }}
 
   # Generated from internal/models (override: ~/.convergence/models.yaml).
@@ -92,6 +92,21 @@ llm:
             - {model: pinball-{{ .Models.Fallback }}}
     - name: pinball
       routing: *pinball_routing
+    - name: light
+      routing:
+        conditional:
+          targets:
+            - {model: pinball-{{ .Models.TierModel "light" }}}
+    - name: standard
+      routing:
+        conditional:
+          targets:
+            - {model: pinball-{{ .Models.TierModel "standard" }}}
+    - name: heavy
+      routing:
+        conditional:
+          targets:
+            - {model: pinball-{{ .Models.TierModel "heavy" }}}
 
   models:
 {{- range .Models.Models }}

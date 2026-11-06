@@ -147,5 +147,7 @@ omo.jsonc to "convergence/auto" or "convergence/pinball".`))
 	addClientCmd("hermes", "Add a `convergence` provider to ~/.hermes/config.yaml", nil, nil)
 	addClientCmd("goose", "Point Goose (~/.config/goose/config.yaml) at Convergence", nil, nil)
 	addClientCmd("continue", "Add Convergence to Continue (~/.continue/config.yaml)", nil, nil)
+	addClientCmd("zed", "Point Zed (~/.config/zed/settings.json) at Convergence", nil, nil)
+	addClientCmd("cline", "Point Cline/Roo Code (~/.config/Code/User/settings.json) at Convergence", nil, nil)
 	rootCmd.AddCommand(configCmd)
 }

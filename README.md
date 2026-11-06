@@ -168,6 +168,8 @@ Worked examples, using the point values in the Pinball README (they may change w
 | Goose | `convergence config goose` | `~/.config/goose/config.yaml` |
 | Hermes Agent | `convergence config hermes` | `~/.hermes/config.yaml` |
 | Continue | `convergence config continue` | `~/.continue/config.json` |
+| Zed | `convergence config zed` | `~/.config/zed/settings.json` |
+| Cline / Roo Code | `convergence config cline` | `~/.config/Code/User/settings.json` |
 | Anything else | `convergence config copilot` | Nothing. Prints `OPENAI_*` / `ANTHROPIC_*` exports to `eval` in your shell. |
 
 `convergence config list` shows the supported clients and whether each is currently pointed at Convergence.

@@ -118,6 +118,21 @@ stringData:
                 - {model: pinball-{{ .Fallback }}}
         - name: pinball
           routing: *pinball_routing
+        - name: light
+          routing:
+            conditional:
+              targets:
+                - {model: pinball-{{ .R.TierModel "light" }}}
+        - name: standard
+          routing:
+            conditional:
+              targets:
+                - {model: pinball-{{ .R.TierModel "standard" }}}
+        - name: heavy
+          routing:
+            conditional:
+              targets:
+                - {model: pinball-{{ .R.TierModel "heavy" }}}
       models:
 {{- range .Entries }}
         - name: pinball-{{ .Name }}
@@ -596,4 +611,59 @@ spec:
         - podSelector: {matchLabels: {app: agentgateway}}
       ports:
         - {protocol: TCP, port: 4141}
+{{- end }}
+{{- if .IngressHost }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agentgateway
+  namespace: {{ .Namespace }}
+spec:
+  rules:
+    - host: {{ .IngressHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agentgateway
+                port:
+                  number: 3000
+{{- end }}
+{{- if .EnablePDB }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentgateway-pdb
+  namespace: {{ .Namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agentgateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stand-in-pdb
+  namespace: {{ .Namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: stand-in
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pinball-pdb
+  namespace: {{ .Namespace }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pinball
 {{- end }}

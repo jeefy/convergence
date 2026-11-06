@@ -28,6 +28,8 @@ var clusterInstallCmd = &cobra.Command{
 		failOpen, _ := cmd.Flags().GetBool("fail-open")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
+		ingressHost, _ := cmd.Flags().GetString("ingress-host")
+		enablePDB, _ := cmd.Flags().GetBool("enable-pdb")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		imgAGW, _ := cmd.Flags().GetString("image-agentgateway")
 		imgStandIn, _ := cmd.Flags().GetString("image-standin")
@@ -45,6 +47,8 @@ var clusterInstallCmd = &cobra.Command{
 			FailOpen:          failOpen,
 			OpenAIBaseURL:     openaiBase,
 			ModelsFile:        modelsFile,
+			IngressHost:       ingressHost,
+			EnablePDB:         enablePDB,
 			DryRun:            dryRun,
 			ImageAgentGateway: imgAGW,
 			ImageStandIn:      imgStandIn,
@@ -118,6 +122,8 @@ func init() {
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
+	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")
+	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 	clusterInstallCmd.Flags().String("image-agentgateway", "", "Override agentgateway image (tag or digest)")
 	clusterInstallCmd.Flags().String("image-standin", "", "Override stand-in image (tag or digest)")

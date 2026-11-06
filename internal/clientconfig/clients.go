@@ -67,8 +67,11 @@ var clients = []client{
 					"name":    "Convergence",
 					"options": map[string]any{"baseURL": root + "/v1", "apiKey": Key},
 					"models": map[string]any{
-						"auto":    map[string]any{"name": "Convergence Auto"},
-						"pinball": map[string]any{"name": "Convergence Pinball"},
+						"auto":     map[string]any{"name": "Convergence Auto"},
+						"pinball":  map[string]any{"name": "Convergence Pinball"},
+						"light":    map[string]any{"name": "Convergence Light"},
+						"standard": map[string]any{"name": "Convergence Standard"},
+						"heavy":    map[string]any{"name": "Convergence Heavy"},
 					},
 				}},
 			}
@@ -78,7 +81,7 @@ var clients = []client{
 			return ops
 		},
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "provider", Key); return ok },
-		note:    "Models: convergence/auto, convergence/pinball. Default model untouched unless --set-default.",
+		note:    "Models: convergence/auto, convergence/pinball, convergence/light, convergence/standard, convergence/heavy. Default model untouched unless --set-default.",
 	},
 	{
 		name:   "claude-code",
@@ -106,6 +109,7 @@ var clients = []client{
 			}
 		},
 		pointed: func(d map[string]any) bool { return lookupString(d, "openai-api-key") == Key },
+		note:    "Configures openai-api-base and model openai/auto. Note: export OPENAI_API_BASE=" + Key + " if using LiteLLM env mode.",
 	},
 	{
 		name:   "goose",
@@ -133,7 +137,13 @@ var clients = []client{
 				"name":     "Convergence",
 				"base_url": root + "/v1",
 				"api_key":  Key,
-				"models":   map[string]any{"auto": map[string]any{}, "pinball": map[string]any{}},
+				"models": map[string]any{
+					"auto":     map[string]any{},
+					"pinball":  map[string]any{},
+					"light":    map[string]any{},
+					"standard": map[string]any{},
+					"heavy":    map[string]any{},
+				},
 			}}}
 		},
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "providers", Key); return ok },
@@ -152,6 +162,18 @@ var clients = []client{
 					"name": "Convergence (Auto)", "provider": "openai", "model": "auto",
 					"apiBase": root + "/v1", "apiKey": Key,
 				}},
+				{path: []string{"models", itemPrefix + "Convergence (Light)"}, val: map[string]any{
+					"name": "Convergence (Light)", "provider": "openai", "model": "light",
+					"apiBase": root + "/v1", "apiKey": Key,
+				}},
+				{path: []string{"models", itemPrefix + "Convergence (Standard)"}, val: map[string]any{
+					"name": "Convergence (Standard)", "provider": "openai", "model": "standard",
+					"apiBase": root + "/v1", "apiKey": Key,
+				}},
+				{path: []string{"models", itemPrefix + "Convergence (Heavy)"}, val: map[string]any{
+					"name": "Convergence (Heavy)", "provider": "openai", "model": "heavy",
+					"apiBase": root + "/v1", "apiKey": Key,
+				}},
 			}
 		},
 		pointed: func(d map[string]any) bool {
@@ -159,6 +181,48 @@ var clients = []client{
 			return ok
 		},
 		note: "Targets config.yaml (config.json is deprecated upstream).",
+	},
+	{
+		name:   "zed",
+		format: JSON,
+		path: func(h string) string {
+			return filepath.Join(h, ".config", "zed", "settings.json")
+		},
+		ops: func(_ Options, root string) []setOp {
+			return []setOp{
+				{path: []string{"language_models", "openai", "api_url"}, val: root + "/v1"},
+				{path: []string{"language_models", "openai", "available_models"}, val: []any{
+					map[string]any{"name": "auto", "display_name": "Convergence Auto", "max_tokens": 128000},
+					map[string]any{"name": "light", "display_name": "Convergence Light", "max_tokens": 128000},
+					map[string]any{"name": "standard", "display_name": "Convergence Standard", "max_tokens": 128000},
+					map[string]any{"name": "heavy", "display_name": "Convergence Heavy", "max_tokens": 128000},
+				}},
+			}
+		},
+		pointed: func(d map[string]any) bool {
+			u := lookupString(d, "language_models", "openai", "api_url")
+			return strings.Contains(u, "3000") || strings.Contains(u, "/v1")
+		},
+		note: "Configures language_models.openai.api_url in ~/.config/zed/settings.json. Set OPENAI_API_KEY=convergence in your environment.",
+	},
+	{
+		name:   "cline",
+		format: JSON,
+		path: func(h string) string {
+			return filepath.Join(h, ".config", "Code", "User", "settings.json")
+		},
+		ops: func(_ Options, root string) []setOp {
+			return []setOp{
+				{path: []string{"cline.apiProvider"}, val: "openai-compatible"},
+				{path: []string{"cline.openAiBaseUrl"}, val: root + "/v1"},
+				{path: []string{"cline.openAiApiKey"}, val: Key},
+				{path: []string{"cline.openAiModelId"}, val: "auto"},
+			}
+		},
+		pointed: func(d map[string]any) bool {
+			return lookupString(d, "cline.openAiApiKey") == Key
+		},
+		note: "Configures VS Code User settings for Cline / Roo Code with provider openai-compatible and model auto.",
 	},
 }
 
