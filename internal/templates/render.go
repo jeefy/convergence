@@ -62,7 +62,7 @@ const (
 
 // publicFiles hold no secrets and are bind-mounted into containers running
 // as other uids, so they must be world-readable.
-var publicFiles = []string{ComposeFile, "agentgateway.yaml", "pinball.yaml"}
+var publicFiles = []string{ComposeFile, "agentgateway.yaml", "pinball.yaml", "copilot-api-idle-timeout.js", "copilot-api-bunfig.toml"}
 
 // VolumeSuffix is the bind-mount option suffix for this host.
 func VolumeSuffix() string {

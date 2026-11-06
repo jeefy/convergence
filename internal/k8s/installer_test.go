@@ -315,3 +315,25 @@ func TestClusterIngressAndPDB(t *testing.T) {
 		t.Errorf("missing PodDisruptionBudget resources")
 	}
 }
+
+func TestCopilotAPIIdleTimeoutShim(t *testing.T) {
+	manifests, err := RenderManifests(&ClusterOptions{
+		Namespace:    "convergence-test",
+		Provider:     "copilot",
+		CopilotToken: "test_token_copilot",
+		StandinSalt:  "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+	})
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+	for _, want := range []string{
+		"name: copilot-api-idle-timeout",
+		"idleTimeout: options.idleTimeout ?? 0",
+		`preload = ["/etc/copilot-api/idle-timeout.js"]`,
+		"mountPath: /app/bunfig.toml",
+	} {
+		if !strings.Contains(manifests, want) {
+			t.Errorf("manifests missing %q", want)
+		}
+	}
+}

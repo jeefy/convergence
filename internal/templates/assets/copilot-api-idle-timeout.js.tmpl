@@ -1,0 +1,8 @@
+// Rendered by convergence. Bun.serve defaults idleTimeout to 10s, which cuts
+// streamed completions whenever Copilot is silent for >10s (long tool calls,
+// large contexts): copilot-api logs "request timed out after 10 seconds" and
+// agentgateway waits on a dead upstream. copilot-api v0.7.0 has no flag for it
+// (upstream: ericc-ch/copilot-api#153, #268), so preload this shim to disable
+// the idle timeout unless the caller set one explicitly.
+const serve = Bun.serve.bind(Bun);
+Bun.serve = (options) => serve({ ...options, idleTimeout: options.idleTimeout ?? 0 });

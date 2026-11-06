@@ -10,6 +10,10 @@ All notable changes to this project are documented here. The format follows [Kee
   - `ghcr.io/jeefy/stand-in` to `0.6.0` (digest `sha256:39db3c7318d49b9e6d2f7bde7ec2c7828522437dddbc02b0a1bd9c07b391c2b2`)
   - `ghcr.io/jeefy/pinball` to `0.7.4` (digest `sha256:0f70fd86a0b1fd1926909df11bfa6d9c388568d01a107c842677af3417be9b4d`)
 
+### Fixed
+
+- copilot-api: disable Bun's 10s `idleTimeout` via a preloaded shim (compose + Kubernetes). Long or silent upstream completions were cut mid-response (`request timed out after 10 seconds`) and agentgateway then waited on a dead upstream. Upstream issue: ericc-ch/copilot-api#153.
+
 ## [0.1.3] - 2026-11-05
 
 ### Added
