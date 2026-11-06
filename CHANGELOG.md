@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-05
+
 ### Added
 
 - Model tier routes: virtual models `light`, `standard`, and `heavy` exposed directly in gateway configs without requiring `x-pinball-tier` header overrides.
@@ -14,6 +16,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Lifecycle & compose cleanup: added `convergence down` and `convergence prune` commands for local Docker/Podman compose environments.
 - Observability: latency quantiles (P50, P90, P99) in `convergence stats` and bundled sample Grafana dashboard in `docs/grafana-dashboard.json`.
 - Sandboxing: `-v` / `--mount` flag for `convergence sandbox run` to pass workspace directories into nono, OpenShell, and Docker Sandboxes (`sbx`).
+
+### Fixed
+
+- Test suite: podman smoke test no longer requires a live OpenShell docker socket.
 
 ## [0.1.2] - 2026-11-05
 
