@@ -182,7 +182,33 @@ var stopCmd = &cobra.Command{
 	},
 }
 
+var downCmd = &cobra.Command{
+	Use:   "down",
+	Short: "Stop and remove Convergence containers, networks, and volumes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := loadStack()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Tearing down Convergence services with %s...\n", s.eng.Name())
+		return s.eng.Down(cmd.Context(), s.dir)
+	},
+}
+
+var pruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Prune dangling container images, stopped containers, and unused networks",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := loadStack()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Pruning dangling containers and images with %s...\n", s.eng.Name())
+		return s.eng.Prune(cmd.Context(), s.dir)
+	},
+}
+
 func init() {
 	startCmd.Flags().BoolVar(&startStrict, "strict", false, "Fail (instead of warn) when Ollama lacks a mapped model or is unreachable")
-	rootCmd.AddCommand(startCmd, stopCmd)
+	rootCmd.AddCommand(startCmd, stopCmd, downCmd, pruneCmd)
 }

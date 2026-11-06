@@ -75,6 +75,16 @@ func (e *ComposeEngine) Down(ctx context.Context, dir string) error {
 	return e.runCompose(ctx, dir, "down", "-v", "--remove-orphans")
 }
 
+func (e *ComposeEngine) Prune(ctx context.Context, dir string) error {
+	cmd := exec.CommandContext(ctx, e.binary, "system", "prune", "-f")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s system prune failed: %w (output: %s)", e.Name(), err, string(out))
+	}
+	return nil
+}
+
 // Pull fetches the images referenced by the compose file, streaming progress.
 func (e *ComposeEngine) Pull(ctx context.Context, dir string) error {
 	cmd := e.composeCmd(ctx, dir, "pull")

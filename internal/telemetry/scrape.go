@@ -57,6 +57,7 @@ type Stats struct {
 		Errors    float64            `json:"errors"`
 		TokensIn  *float64           `json:"tokens_in,omitempty"`
 		TokensOut *float64           `json:"tokens_out,omitempty"`
+		Latency   *LatencySummary    `json:"latency_ms,omitempty"`
 	} `json:"gateway"`
 	StandIn struct {
 		Section
@@ -71,6 +72,12 @@ type Stats struct {
 		ByTier    map[string]float64 `json:"by_tier,omitempty"`
 		ByModel   map[string]float64 `json:"by_model,omitempty"`
 	} `json:"pinball"`
+}
+
+type LatencySummary struct {
+	P50 float64 `json:"p50"`
+	P90 float64 `json:"p90"`
+	P99 float64 `json:"p99"`
 }
 
 // AllDown reports whether every source failed.

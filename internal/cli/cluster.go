@@ -110,6 +110,38 @@ var clusterStatusCmd = &cobra.Command{
 	},
 }
 
+var clusterLogsCmd = &cobra.Command{
+	Use:       "logs [service]",
+	Short:     "Show logs for in-cluster pods (agentgateway, stand-in, pinball, copilot-api)",
+	ValidArgs: []string{"agentgateway", "stand-in", "pinball", "copilot-api"},
+	Args:      cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ns, _ := cmd.Flags().GetString("namespace")
+		follow, _ := cmd.Flags().GetBool("follow")
+		tail, _ := cmd.Flags().GetString("tail")
+
+		kArgs := []string{"-n", ns, "logs"}
+		if len(args) > 0 {
+			kArgs = append(kArgs, "-l", "app="+args[0])
+		} else {
+			kArgs = append(kArgs, "-l", "app in (agentgateway, stand-in, pinball, copilot-api)")
+		}
+		if follow {
+			kArgs = append(kArgs, "-f")
+		}
+		if tail != "" {
+			kArgs = append(kArgs, "--tail="+tail)
+		}
+		c := exec.CommandContext(cmd.Context(), "kubectl", kArgs...)
+		c.Stdout = cmd.OutOrStdout()
+		c.Stderr = cmd.ErrOrStderr()
+		if err := c.Run(); err != nil {
+			return fmt.Errorf("kubectl logs failed: %w", err)
+		}
+		return nil
+	},
+}
+
 func init() {
 	clusterInstallCmd.Flags().String("namespace", "convergence", "Target Kubernetes namespace")
 	clusterInstallCmd.Flags().String("provider", "copilot", "LLM backend provider: copilot or direct")
@@ -132,11 +164,16 @@ func init() {
 
 	clusterStatusCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
 
+	clusterLogsCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
+	clusterLogsCmd.Flags().BoolP("follow", "f", false, "Follow log output")
+	clusterLogsCmd.Flags().String("tail", "", "Lines of recent log file to display")
+
 	clusterUninstallCmd.Flags().String("namespace", "convergence", "Kubernetes namespace")
 	clusterUninstallCmd.Flags().Bool("yes", false, "Confirm deletion")
 
 	clusterCmd.AddCommand(clusterInstallCmd)
 	clusterCmd.AddCommand(clusterUninstallCmd)
 	clusterCmd.AddCommand(clusterStatusCmd)
+	clusterCmd.AddCommand(clusterLogsCmd)
 	rootCmd.AddCommand(clusterCmd)
 }

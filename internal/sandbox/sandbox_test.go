@@ -42,15 +42,25 @@ func TestGetDriver(t *testing.T) {
 	if dNono.InferenceURL() != "http://127.0.0.1:3000/v1" {
 		t.Errorf("unexpected nono InferenceURL: %s", dNono.InferenceURL())
 	}
-	cmd, env, err := dNono.RunCommand("opencode", []string{"--foo"})
+	cmd, env, err := dNono.RunCommand("opencode", []string{"--foo"}, "/tmp/test")
 	if err != nil {
 		t.Fatalf("RunCommand failed: %v", err)
 	}
-	if len(cmd) < 4 || cmd[0] != "nono" || cmd[1] != "run" {
+	if len(cmd) < 6 || cmd[0] != "nono" || cmd[1] != "run" {
 		t.Errorf("unexpected RunCommand result: %v", cmd)
 	}
 	if len(env) == 0 {
 		t.Errorf("expected env vars for nono, got none")
+	}
+
+	cmdOS, _, err := dOS.RunCommand("opencode", []string{"--bar"}, "/tmp/test")
+	if err != nil || len(cmdOS) < 6 || cmdOS[3] != "-v" || cmdOS[4] != "/tmp/test" {
+		t.Errorf("unexpected OpenShell RunCommand result: %v, err %v", cmdOS, err)
+	}
+
+	cmdSbx, _, err := dSbx.RunCommand("opencode", []string{"--baz"}, "/tmp/test")
+	if err != nil || len(cmdSbx) < 6 || cmdSbx[2] != "-v" || cmdSbx[3] != "/tmp/test" {
+		t.Errorf("unexpected DockerSbx RunCommand result: %v, err %v", cmdSbx, err)
 	}
 
 	_, err = GetDriver(config.SandboxType("unknown"), cfg)

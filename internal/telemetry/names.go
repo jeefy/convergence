@@ -5,4 +5,5 @@ const (
 	GWRequests       = "agentgateway_requests_total"
 	GWTokens         = "agentgateway_gen_ai_client_token_usage_sum" //nolint:gosec // G101 false positive: Prometheus metric name
 	GWTokenTypeLabel = "gen_ai_token_type"                          //nolint:gosec // G101 false positive: Prometheus label name
+	GWLatency        = "agentgateway_request_duration_seconds"
 )

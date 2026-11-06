@@ -81,6 +81,9 @@ func TestFillGateway_when_success_and_error(t *testing.T) {
 	s, _ := ParseProm(strings.NewReader(fixture +
 		`agentgateway_gen_ai_client_token_usage_sum{gen_ai_token_type="input"} 21
 agentgateway_gen_ai_client_token_usage_sum{gen_ai_token_type="output"} 15
+agentgateway_request_duration_seconds{quantile="0.5"} 0.045
+agentgateway_request_duration_seconds{quantile="0.9"} 0.120
+agentgateway_request_duration_seconds{quantile="0.99"} 0.350
 `))
 	st := &Stats{}
 	fillGateway(st, s)
@@ -89,6 +92,9 @@ agentgateway_gen_ai_client_token_usage_sum{gen_ai_token_type="output"} 15
 	}
 	if st.Gateway.TokensIn == nil || *st.Gateway.TokensIn != 21 || *st.Gateway.TokensOut != 15 {
 		t.Errorf("tokens = %+v", st.Gateway)
+	}
+	if st.Gateway.Latency == nil || st.Gateway.Latency.P50 != 45 || st.Gateway.Latency.P90 != 120 || st.Gateway.Latency.P99 != 350 {
+		t.Errorf("latency = %+v", st.Gateway.Latency)
 	}
 	if math.IsNaN(st.Gateway.Requests) {
 		t.Error("nan")

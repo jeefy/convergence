@@ -23,7 +23,7 @@ type Driver interface {
 	Type() config.SandboxType
 	Status(ctx context.Context) (StatusResult, error)
 	InferenceURL() string
-	RunCommand(agent string, args []string) ([]string, []string, error)
+	RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error)
 }
 
 func GetDriver(sbx config.SandboxType, cfg *config.Config) (Driver, error) {
@@ -61,7 +61,7 @@ func (d *noneDriver) InferenceURL() string {
 	return ""
 }
 
-func (d *noneDriver) RunCommand(agent string, args []string) ([]string, []string, error) {
+func (d *noneDriver) RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error) {
 	cmd := append([]string{agent}, args...)
 	return cmd, nil, nil
 }
@@ -117,8 +117,15 @@ func (d *openShellDriver) InferenceURL() string {
 	return "https://inference.local"
 }
 
-func (d *openShellDriver) RunCommand(agent string, args []string) ([]string, []string, error) {
-	cmd := append([]string{"openshell", "sandbox", "create", "--", agent}, args...)
+func (d *openShellDriver) RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error) {
+	var mountArgs []string
+	for _, m := range mounts {
+		mountArgs = append(mountArgs, "-v", m)
+	}
+	base := []string{"openshell", "sandbox", "create"}
+	base = append(base, mountArgs...)
+	base = append(base, "--", agent)
+	cmd := append(base, args...)
 	return cmd, nil, nil
 }
 
@@ -143,8 +150,15 @@ func (d *dockerSbxDriver) InferenceURL() string {
 	return "http://host.docker.internal:3000/v1"
 }
 
-func (d *dockerSbxDriver) RunCommand(agent string, args []string) ([]string, []string, error) {
-	cmd := append([]string{"sbx", "run", "--", agent}, args...)
+func (d *dockerSbxDriver) RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error) {
+	var mountArgs []string
+	for _, m := range mounts {
+		mountArgs = append(mountArgs, "-v", m)
+	}
+	base := []string{"sbx", "run"}
+	base = append(base, mountArgs...)
+	base = append(base, "--", agent)
+	cmd := append(base, args...)
 	env := []string{
 		"OPENAI_BASE_URL=" + d.InferenceURL(),
 	}
@@ -172,7 +186,7 @@ func (d *k8sAgentDriver) InferenceURL() string {
 	return "http://agentgateway.convergence.svc:3000/v1"
 }
 
-func (d *k8sAgentDriver) RunCommand(agent string, args []string) ([]string, []string, error) {
+func (d *k8sAgentDriver) RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error) {
 	return nil, nil, fmt.Errorf("k8s-agent workloads must be launched via Kubernetes Custom Resource")
 }
 
@@ -215,11 +229,18 @@ func (d *nonoDriver) InferenceURL() string {
 	return fmt.Sprintf("http://%s:%d/v1", host, port)
 }
 
-func (d *nonoDriver) RunCommand(agent string, args []string) ([]string, []string, error) {
-	cmd := append([]string{"nono", "run", "--allow-cwd", "--", agent}, args...)
-	base := d.InferenceURL()
+func (d *nonoDriver) RunCommand(agent string, args []string, mounts ...string) ([]string, []string, error) {
+	var mountArgs []string
+	for _, m := range mounts {
+		mountArgs = append(mountArgs, "--allow-path", m)
+	}
+	base := []string{"nono", "run", "--allow-cwd"}
+	base = append(base, mountArgs...)
+	base = append(base, "--", agent)
+	cmd := append(base, args...)
+	baseInference := d.InferenceURL()
 	env := []string{
-		"OPENAI_BASE_URL=" + base,
+		"OPENAI_BASE_URL=" + baseInference,
 		"ANTHROPIC_BASE_URL=" + fmt.Sprintf("http://127.0.0.1:%d", config.DefaultGatewayPort),
 		"OPENAI_API_KEY=unused",
 		"ANTHROPIC_API_KEY=unused",

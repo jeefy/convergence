@@ -9,8 +9,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - Model tier routes: virtual models `light`, `standard`, and `heavy` exposed directly in gateway configs without requiring `x-pinball-tier` header overrides.
 - Client configs: support for Zed (`convergence config zed`) and Cline / Roo Code (`convergence config cline`), plus tier model exports (`convergence/light`, `convergence/standard`, `convergence/heavy`) for OpenCode, Continue, and Hermes.
 - Model mapping: support multi-provider mixing in `models.yaml` (e.g. `ollama:` for light tier and `anthropic:` for heavy tier) and dynamic upstream instantiation in gateway templates.
-- Kubernetes: `--ingress-host` and `--enable-pdb` flags on `convergence cluster install` for optional Ingress and PodDisruptionBudgets.
+- Kubernetes: `--ingress-host` and `--enable-pdb` flags on `convergence cluster install` for optional Ingress and PodDisruptionBudgets, plus `convergence cluster logs` command to stream in-cluster pod logs.
 - Security: image SHA256 digest pinning for immutable releases across agentgateway, Stand-In, Pinball, and copilot-api.
+- Lifecycle & compose cleanup: added `convergence down` and `convergence prune` commands for local Docker/Podman compose environments.
+- Observability: latency quantiles (P50, P90, P99) in `convergence stats` and bundled sample Grafana dashboard in `docs/grafana-dashboard.json`.
+- Sandboxing: `-v` / `--mount` flag for `convergence sandbox run` to pass workspace directories into nono, OpenShell, and Docker Sandboxes (`sbx`).
 
 ## [0.1.2] - 2026-11-05
 

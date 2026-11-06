@@ -29,6 +29,24 @@ func fillGateway(st *Stats, s []Sample) {
 		out := Sum(s, GWTokens, map[string]string{GWTokenTypeLabel: "output"})
 		g.TokensIn, g.TokensOut = &in, &out
 	}
+	for _, x := range s {
+		if strings.HasPrefix(x.Name, GWLatency) {
+			if qStr, ok := x.Labels["quantile"]; ok {
+				if g.Latency == nil {
+					g.Latency = &LatencySummary{}
+				}
+				ms := x.Value * 1000
+				switch qStr {
+				case "0.5":
+					g.Latency.P50 = ms
+				case "0.9":
+					g.Latency.P90 = ms
+				case "0.99":
+					g.Latency.P99 = ms
+				}
+			}
+		}
+	}
 }
 
 func fillStandIn(st *Stats, s []Sample) {
@@ -85,6 +103,9 @@ func Print(st *Stats, w io.Writer) {
 			line(w, "  Tokens out: %.0f", *st.Gateway.TokensOut)
 		} else {
 			line(w, "  Tokens:     not reported yet")
+		}
+		if st.Gateway.Latency != nil {
+			line(w, "  Latency:    p50: %.1fms, p90: %.1fms, p99: %.1fms", st.Gateway.Latency.P50, st.Gateway.Latency.P90, st.Gateway.Latency.P99)
 		}
 	}
 	line(w, "Stand-In")

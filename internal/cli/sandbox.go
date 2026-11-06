@@ -12,7 +12,10 @@ import (
 	"github.com/jeefy/convergence/internal/sandbox"
 )
 
-var sandboxJSON bool
+var (
+	sandboxJSON   bool
+	sandboxMounts []string
+)
 
 var sandboxCmd = &cobra.Command{
 	Use:   "sandbox",
@@ -98,7 +101,7 @@ var sandboxRunCmd = &cobra.Command{
 		agent := args[0]
 		agentArgs := args[1:]
 
-		execCmd, envVars, err := driver.RunCommand(agent, agentArgs)
+		execCmd, envVars, err := driver.RunCommand(agent, agentArgs, sandboxMounts...)
 		if err != nil {
 			return err
 		}
@@ -119,6 +122,7 @@ var sandboxRunCmd = &cobra.Command{
 
 func init() {
 	sandboxStatusCmd.Flags().BoolVar(&sandboxJSON, "json", false, "Output status as JSON")
+	sandboxRunCmd.Flags().StringSliceVarP(&sandboxMounts, "mount", "v", nil, "Mount directory or path into the sandbox runtime (e.g. -v /path/to/dir)")
 	sandboxCmd.AddCommand(sandboxStatusCmd)
 	sandboxCmd.AddCommand(sandboxListCmd)
 	sandboxCmd.AddCommand(sandboxRunCmd)

@@ -180,22 +180,24 @@ Worked examples, using the point values in the Pinball README (they may change w
 |---|---|
 | `init [--yes] [--provider P] [--engine docker\|podman] [--sandbox S] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--image-openshell IMG]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
 | `login copilot` | GitHub device-flow login; stores the token for the Copilot provider. |
-| `start [--strict]` / `stop` / `restart` | Manage the local containers. `--strict` fails (instead of warning) when Ollama lacks a mapped model. |
+| `start [--strict]` / `stop` / `restart` / `down` | Manage the local containers. `--strict` fails (instead of warning) when Ollama lacks a mapped model. `down` stops and removes containers and networks. |
+| `prune` | Remove dangling images, stopped containers, and unused networks. |
 | `status [--json]` | Per service: container state and health probe; exits non-zero if a service is down. Prints a loud warning when Stand-In is down or fail-open. |
 | `doctor [--e2e] [--json] [--gateway-url URL] [--timeout D]` | Self-diagnosis; see [Doctor](#doctor). |
 | `models` / `models init` | Show the tier to upstream model mapping / write a starter `~/.convergence/models.yaml`. |
 | `logs [-f] [service]` | Show (or follow) logs for all services or one of `agentgateway`, `stand-in`, `pinball`, `copilot-api`. |
-| `stats [--json] [--watch]` | Request counts, tokens, latency, tier decisions and redactions read from Prometheus metrics. |
+| `stats [--json] [--watch]` | Request counts, tokens, latency quantiles (p50/p90/p99), tier decisions and redactions read from Prometheus metrics. |
 | `config list` | List supported clients. |
 | `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
 | `config <client> restore [--force]` | Restore the client's backup. |
-| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG]` | Apply manifests to the current kube context. `--dry-run` prints them. |
+| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--ingress-host HOST] [--enable-pdb] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG]` | Apply manifests to the current kube context. `--dry-run` prints them. |
 | `cluster status [--namespace NS]` | Rollout and pod health. |
+| `cluster logs [-f] [--tail N] [service]` | Stream logs from in-cluster pods. |
 | `cluster uninstall [--namespace NS] [--yes]` | Delete the Convergence resources. |
 | `optimize --db-dsn DSN [--dry-run]` | **Experimental.** Run a Pinball evaluation and within-tier re-ranking against a Pinball history database. |
 | `sandbox list` | List supported sandboxing runtimes. |
 | `sandbox status [--json]` | Show status and reachability of the configured sandboxing runtime. |
-| `sandbox run <agent> [args...]` | Run an agent inside the configured sandbox runtime with inference routed to Convergence. |
+| `sandbox run [-v/--mount path] <agent> [args...]` | Run an agent inside the configured sandbox runtime with inference routed to Convergence. |
 | `upgrade` | Pull the image versions pinned by this binary and recreate the stack. |
 | `uninstall [--purge] [--yes]` | Stop and remove the stack. `--purge` also deletes `~/.convergence`. |
 | `version` | Version, commit, build date. |
