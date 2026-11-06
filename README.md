@@ -245,7 +245,7 @@ What it does **not** do:
 Local exposure:
 
 - All published ports bind to `127.0.0.1` by default (`bind_address` in `~/.convergence/config.yaml`). Change it only if you mean to expose the gateway, which has no authentication of its own.
-- Provider keys and tokens are stored in plaintext in `~/.convergence/config.yaml` and `~/.convergence/.env`, both mode `0600`. Rendered compose and gateway files contain no secrets: compose reads them from the `.env` file next to it. Containers use `json-file` log rotation (10 MB, 3 files), Stand-In, Pinball and copilot-api have healthchecks, and agentgateway has none (distroless image; `status` probes its port). In the cluster, keys live in Kubernetes Secrets.
+- Provider keys and tokens are stored in plaintext in `~/.convergence/config.yaml` and `~/.convergence/.env`, both mode `0600`. Rendered compose and gateway files contain no secrets: compose reads them from the `.env` file next to it. Containers use `json-file` log rotation (10 MB, 3 files); Pinball and copilot-api have healthchecks, while agentgateway and Stand-In are distroless images probed over their ports by `convergence status`. In the cluster, keys live in Kubernetes Secrets.
 
 Limitations:
 

@@ -231,8 +231,11 @@ func TestComposeHasLoggingAndHealthDeps(t *testing.T) {
 	if n := strings.Count(c, "max-size"); n != 4 {
 		t.Errorf("logging on %d services, want 4", n)
 	}
-	if n := strings.Count(c, "condition: service_healthy"); n != 3 {
-		t.Errorf("healthy deps %d, want 3", n)
+	if n := strings.Count(c, "condition: service_healthy"); n != 2 {
+		t.Errorf("healthy deps %d, want 2", n)
+	}
+	if !strings.Contains(c, "stand-in:\n        condition: service_started") {
+		t.Errorf("expected stand-in to have condition: service_started")
 	}
 }
 
@@ -243,8 +246,8 @@ func TestHealthcheckPythonHasNoWhitespace(t *testing.T) {
 	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
 	re := regexp.MustCompile(`"python3", "-c", "([^"]*)"`)
 	m := re.FindAllStringSubmatch(files[ComposeFile], -1)
-	if len(m) != 2 {
-		t.Fatalf("found %d python healthchecks, want 2", len(m))
+	if len(m) != 1 {
+		t.Fatalf("found %d python healthchecks, want 1", len(m))
 	}
 	for _, g := range m {
 		if strings.ContainsAny(g[1], " \t;") {
