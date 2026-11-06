@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Model tier routes: virtual models `light`, `standard`, and `heavy` exposed directly in gateway configs without requiring `x-pinball-tier` header overrides.
+- Client configs: support for Zed (`convergence config zed`) and Cline / Roo Code (`convergence config cline`), plus tier model exports (`convergence/light`, `convergence/standard`, `convergence/heavy`) for OpenCode, Continue, and Hermes.
+- Model mapping: support multi-provider mixing in `models.yaml` (e.g. `ollama:` for light tier and `anthropic:` for heavy tier) and dynamic upstream instantiation in gateway templates.
+- Kubernetes: `--ingress-host` and `--enable-pdb` flags on `convergence cluster install` for optional Ingress and PodDisruptionBudgets.
+- Security: image SHA256 digest pinning for immutable releases across agentgateway, Stand-In, Pinball, and copilot-api.
+
 ## [0.1.2] - 2026-11-05
 
 ### Added
