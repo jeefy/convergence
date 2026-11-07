@@ -30,6 +30,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Optional request-log database for local `convergence optimize`: `init --request-log-db <postgres-dsn>` (config `request_log_db`) renders `config.logging.database` plus `frontendPolicies.accessLog.database.llm: full` in the compose config; the DSN is passed via `.env`. `convergence optimize` falls back to it when `--db-dsn` is not given. Off by default. `full` stores prompts and completions.
+- agentgateway `frontendPolicies.accessLog.add` now records `pinball.model`, `pinball.tier` and `pinball.reason` (null when the request was not routed by Pinball), in the compose and Kubernetes configs. `pinball-optimize` filters on these attributes in the request log.
 - Model tier routes: virtual models `light`, `standard`, and `heavy` exposed directly in gateway configs without requiring `x-pinball-tier` header overrides.
 - Client configs: support for Zed (`convergence config zed`) and Cline / Roo Code (`convergence config cline`), plus tier model exports (`convergence/light`, `convergence/standard`, `convergence/heavy`) for OpenCode, Continue, and Hermes.
 - Model mapping: support multi-provider mixing in `models.yaml` (e.g. `ollama:` for light tier and `anthropic:` for heavy tier) and dynamic upstream instantiation in gateway templates.

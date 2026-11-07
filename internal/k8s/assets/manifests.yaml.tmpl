@@ -41,6 +41,12 @@ stringData:
       connectionTerminationDeadline: 600s
       logging:
         format: json
+    frontendPolicies:
+      accessLog:
+        add:
+          pinball.model: 'default(extauthz.model, null)'
+          pinball.tier: 'default(extauthz.tier, null)'
+          pinball.reason: 'default(extauthz.reason, null)'
     gateways:
       default:
         port: 3000

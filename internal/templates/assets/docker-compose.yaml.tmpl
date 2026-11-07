@@ -7,10 +7,15 @@ services:
     image: {{ .Images.AgentGateway }}
     command: ["-f", "/etc/agentgateway/agentgateway.yaml"]
     restart: unless-stopped
-{{- if eq .Config.Provider "direct" }}
+{{- if or (eq .Config.Provider "direct") .Config.RequestLogDB }}
     environment:
+{{- if eq .Config.Provider "direct" }}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+{{- end }}
+{{- if .Config.RequestLogDB }}
+      REQUEST_LOG_DB_URL: ${REQUEST_LOG_DB_URL:?REQUEST_LOG_DB_URL missing from .env; run convergence init}
+{{- end }}
 {{- end }}
     ports:
       - "{{ .Config.BindAddress }}:{{ .Config.GatewayPort }}:3000"

@@ -29,6 +29,7 @@ type initFlags struct {
 	port         int
 	bindAddress  string
 	failOpen     bool
+	requestLogDB string
 	ollamaLight  string
 	ollamaStd    string
 	ollamaHeavy  string
@@ -153,6 +154,9 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 	}
 	if f.failOpen {
 		cfg.FailOpen = true
+	}
+	if f.requestLogDB != "" {
+		cfg.RequestLogDB = f.requestLogDB
 	}
 	if f.ollamaLight != "" {
 		cfg.OllamaModelLight = f.ollamaLight
@@ -300,6 +304,7 @@ func init() {
 	f.StringVar(&initOpts.anthropicKey, "anthropic-key", "", "Anthropic API key (direct provider)")
 	f.StringVar(&initOpts.ollamaURL, "ollama-url", "", "Ollama base URL (ollama provider)")
 	f.BoolVar(&initOpts.failOpen, "fail-open", false, "If Stand-In is down, let requests continue UNSCRUBBED to the upstream (default: fail closed, reject them)")
+	f.StringVar(&initOpts.requestLogDB, "request-log-db", "", "Postgres DSN of a request-log database for agentgateway, used by 'convergence optimize' (default: off; stores prompts and completions)")
 	f.StringVar(&initOpts.ollamaLight, "ollama-model-light", "", "Ollama model for the light tier (default from 'convergence models')")
 	f.StringVar(&initOpts.ollamaStd, "ollama-model-standard", "", "Ollama model for the standard tier")
 	f.StringVar(&initOpts.ollamaHeavy, "ollama-model-heavy", "", "Ollama model for the heavy tier")

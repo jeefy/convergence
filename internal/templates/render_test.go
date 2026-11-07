@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -160,7 +161,7 @@ func assertPerm(t *testing.T, path string, want os.FileMode) {
 // fails on unset names: only the provider key variables may appear.
 func TestAgentgatewayOnlyReferencesProvidedEnv(t *testing.T) {
 	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderDirect })
-	allowed := map[string]bool{"$OPENAI_API_KEY": true, "$ANTHROPIC_API_KEY": true}
+	allowed := map[string]bool{"$OPENAI_API_KEY": true, "$ANTHROPIC_API_KEY": true, "$REQUEST_LOG_DB_URL": true}
 	for _, m := range regexp.MustCompile(`\$[A-Za-z_{][A-Za-z0-9_]*`).FindAllString(files["agentgateway.yaml"], -1) {
 		if !allowed[m] {
 			t.Errorf("unexpected env reference %s in agentgateway.yaml", m)
@@ -284,5 +285,43 @@ func TestAgentgatewayExposesPinballPickAsResponseHeaders(t *testing.T) {
 		if !strings.Contains(files["agentgateway.yaml"], h+`: 'default(extauthz.`) {
 			t.Errorf("agentgateway config missing response header %s", h)
 		}
+	}
+}
+
+func TestAccessLogPinballAttributes(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	var parsed struct {
+		FrontendPolicies struct {
+			AccessLog struct {
+				Add map[string]string `yaml:"add"`
+			} `yaml:"accessLog"`
+		} `yaml:"frontendPolicies"`
+	}
+	if err := yaml.Unmarshal([]byte(files["agentgateway.yaml"]), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"pinball.model", "pinball.tier", "pinball.reason"} {
+		if !strings.Contains(parsed.FrontendPolicies.AccessLog.Add[k], "extauthz.") {
+			t.Errorf("accessLog.add[%s] missing: %v", k, parsed.FrontendPolicies.AccessLog.Add)
+		}
+	}
+}
+
+func TestRequestLogDBOffByDefaultAndSecretWhenSet(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "database") || strings.Contains(files[EnvFile], "REQUEST_LOG_DB_URL") {
+		t.Errorf("request log database must be off by default")
+	}
+	const dsn = "postgres://u:pw@db:5432/ag" //nolint:gosec // fake DSN fixture
+	_, files = render(t, func(c *config.Config) { c.RequestLogDB = dsn })
+	ag := files["agentgateway.yaml"]
+	if !strings.Contains(ag, "llm: full") || !strings.Contains(ag, `url: "$REQUEST_LOG_DB_URL"`) {
+		t.Errorf("database not rendered:\n%s", ag)
+	}
+	if strings.Contains(ag, dsn) || strings.Contains(files[ComposeFile], dsn) {
+		t.Errorf("DSN must live only in .env")
+	}
+	if !strings.Contains(files[EnvFile], "REQUEST_LOG_DB_URL='"+dsn+"'") || !strings.Contains(files[ComposeFile], "REQUEST_LOG_DB_URL:") {
+		t.Errorf("DSN not wired through .env/compose")
 	}
 }
