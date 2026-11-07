@@ -383,3 +383,16 @@ func TestOTelInvalidRejected(t *testing.T) {
 		t.Errorf("invalid protocol must fail")
 	}
 }
+
+func TestStandinPatternsFile(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.StandinPatternsFile = "/tmp/p.yaml" })
+	for _, want := range []string{"STANDIN_PATTERNS_FILE: /etc/stand-in/patterns.yaml", "- /tmp/p.yaml:/etc/stand-in/patterns.yaml:ro"} {
+		if !strings.Contains(files["docker-compose.yaml"], want) {
+			t.Errorf("compose missing %q", want)
+		}
+	}
+	_, files = render(t, func(c *config.Config) {})
+	if strings.Contains(files["docker-compose.yaml"], "PATTERNS") {
+		t.Error("unset must not render patterns")
+	}
+}
