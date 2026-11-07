@@ -123,3 +123,8 @@ llm:
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
 {{ end }}
+{{- range .Models.Passthrough }}
+    - name: {{ .Name }}
+      provider: {reference: {{ providerRef .Provider }}}
+      params: {model: {{ .Model }}}
+{{- end }}
