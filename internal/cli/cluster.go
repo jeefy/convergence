@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/k8s"
 )
 
@@ -26,6 +27,9 @@ var clusterInstallCmd = &cobra.Command{
 		optSchedule, _ := cmd.Flags().GetString("opt-schedule")
 		optDSN, _ := cmd.Flags().GetString("optimizer-dsn")
 		failOpen, _ := cmd.Flags().GetBool("fail-open")
+		otelEndpoint, _ := cmd.Flags().GetString("otel-endpoint")
+		otelProtocol, _ := cmd.Flags().GetString("otel-protocol")
+		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
 		ingressHost, _ := cmd.Flags().GetString("ingress-host")
@@ -45,6 +49,7 @@ var clusterInstallCmd = &cobra.Command{
 			OptSchedule:       optSchedule,
 			OptimizerDSN:      optDSN,
 			FailOpen:          failOpen,
+			OTel:              config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
 			OpenAIBaseURL:     openaiBase,
 			ModelsFile:        modelsFile,
 			IngressHost:       ingressHost,
@@ -150,6 +155,9 @@ func init() {
 	clusterInstallCmd.Flags().String("anthropic-key", "", "Anthropic API key")
 	clusterInstallCmd.Flags().String("opt-schedule", "0 3 * * 0", "Cron schedule for pinball optimizer evaluation checks (default: weekly Sunday 03:00)")
 	clusterInstallCmd.Flags().String("optimizer-dsn", "", "Read-only Postgres DSN for the gateway request_logs; enables the pinball optimizer CronJob (stored in Secret pinball-optimizer-db)")
+	clusterInstallCmd.Flags().String("otel-endpoint", "", "Export OTLP traces to this collector host:port (default: off)")
+	clusterInstallCmd.Flags().String("otel-protocol", "", "OTLP protocol: grpc (default) or http")
+	clusterInstallCmd.Flags().Float64("otel-sample", 0, "Trace sampling rate 0..1 (default 1)")
 	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")

@@ -241,6 +241,27 @@ Pinball can replay sampled historical requests against candidate models and re-r
 
 To make the local stack feed the optimizer, give agentgateway a Postgres you operate (reachable from the containers, e.g. `host.docker.internal`): `convergence init --request-log-db postgres://user:pass@host.docker.internal:5432/agentgateway && convergence restart`. The DSN goes to the 0600 `.env` and `config.yaml`, never into the rendered agentgateway config. `convergence optimize` then uses it without `--db-dsn`. **Privacy:** this logs every request with LLM logging `full`, so the database stores prompts and completions (after Stand-In scrubbing, which is pattern-based and not a guarantee). Protect and expire that database accordingly. It is off by default; the compose stack does not ship Postgres. The Kubernetes install does not render the request-log database yet. The optimizer is experimental and opt-in; replays make real model calls. See the [Pinball docs](https://github.com/jeefy/pinball).
 
+## Observability
+
+Optional OTLP trace export, off by default. Convergence only configures the export; you run the collector or backend (OpenTelemetry Collector, Jaeger, Langfuse, Phoenix, Grafana Tempo, ...).
+
+```bash
+convergence init --otel-endpoint localhost:4317               # local (gRPC)
+convergence init --otel-endpoint collector:4318 --otel-protocol http --otel-sample 0.25
+convergence cluster install --provider copilot --otel-endpoint otel-collector.monitoring:4317
+```
+
+Or in `~/.convergence/config.yaml`:
+
+```yaml
+otel:
+  endpoint: localhost:4317   # host:port; unset = no tracing
+  protocol: grpc             # grpc (default) or http
+  sample: 1                  # 0..1, default 1
+```
+
+Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request/response model, input/output tokens) plus `caller` (from the `x-agw-caller` request header) and `pinball.tier`, `pinball.model`, `pinball.reason` for `model: auto` requests. Traces carry metadata only, never prompts or completions. Note that agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`; a proxy in its environment can break OTLP delivery. From a container, use `host.docker.internal:4317` to reach a collector on the host.
+
 ## Security model
 
 What Stand-In does:

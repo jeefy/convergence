@@ -12,7 +12,7 @@ config:
       url: "$REQUEST_LOG_DB_URL"
 {{- end }}
 
-# Lets pinball-optimize find routed requests (attributes_json->>'pinball.tier').
+# accessLog.add lets pinball-optimize find routed requests (attributes_json->>'pinball.tier').
 frontendPolicies:
   accessLog:
     add:
@@ -24,6 +24,19 @@ frontendPolicies:
     # optimizer replays them.
     database:
       llm: full
+{{- end }}
+{{- if .Config.OTel.Enabled }}
+  tracing:
+    host: {{ .Config.OTel.Endpoint }}
+    protocol: {{ .Config.OTel.ProtocolOrDefault }}
+    randomSampling: {{ .Config.OTel.SampleOrDefault }}
+    resources:
+      service.name: '"convergence"'
+    attributes:
+      caller: 'default(request.headers["x-agw-caller"], "")'
+      pinball.tier: 'default(extauthz.tier, "")'
+      pinball.model: 'default(extauthz.model, "")'
+      pinball.reason: 'default(extauthz.reason, "")'
 {{- end }}
 
 gateways:

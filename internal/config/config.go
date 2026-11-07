@@ -86,6 +86,8 @@ type Config struct {
 	// `convergence optimize`. Empty = off. Logging is "full", so the database
 	// holds prompts and completions: treat the DSN and the database as secret.
 	RequestLogDB string `yaml:"request_log_db,omitempty"`
+	// OTel enables OTLP trace export (off unless otel.endpoint is set).
+	OTel OTel `yaml:"otel,omitempty"`
 	// Ollama model overrides per tier ("" = internal/models default).
 	// ~/.convergence/models.yaml wins over these.
 	OllamaModelLight    string `yaml:"ollama_model_light,omitempty"`
@@ -97,6 +99,41 @@ type Config struct {
 	ImagePinball          string `yaml:"image_pinball,omitempty"`
 	ImageCopilotAPI       string `yaml:"image_copilot_api,omitempty"`
 	ImageOpenShellGateway string `yaml:"image_openshell_gateway,omitempty"`
+}
+
+// OTel configures optional OTLP trace export from agentgateway. Zero value
+// (no endpoint) = off and the rendered config is unchanged.
+type OTel struct {
+	Endpoint string  `yaml:"endpoint,omitempty"` // collector host:port
+	Protocol string  `yaml:"protocol,omitempty"` // "grpc" (default) or "http"
+	Sample   float64 `yaml:"sample,omitempty"`   // 0..1; 0 = default 1
+}
+
+func (o OTel) Enabled() bool { return o.Endpoint != "" }
+
+func (o OTel) ProtocolOrDefault() string {
+	if o.Protocol == "" {
+		return "grpc"
+	}
+	return o.Protocol
+}
+
+func (o OTel) SampleOrDefault() float64 {
+	if o.Sample == 0 {
+		return 1
+	}
+	return o.Sample
+}
+
+// Validate rejects a protocol or sample rate agentgateway would not accept.
+func (o OTel) Validate() error {
+	if p := o.ProtocolOrDefault(); p != "grpc" && p != "http" {
+		return fmt.Errorf("invalid otel protocol %q (want grpc or http)", p)
+	}
+	if o.Sample < 0 || o.Sample > 1 {
+		return fmt.Errorf("invalid otel sample %v (want 0..1)", o.Sample)
+	}
+	return nil
 }
 
 // NamedPort is a host port the stack publishes, with the service that owns it.
