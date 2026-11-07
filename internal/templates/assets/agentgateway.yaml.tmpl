@@ -7,8 +7,14 @@ config:
   logging:
     format: json
 
-{{- if .Config.OTel.Enabled }}
+# accessLog.add lets pinball-optimize find routed requests (attributes_json->>'pinball.tier').
 frontendPolicies:
+  accessLog:
+    add:
+      pinball.model: 'default(extauthz.model, null)'
+      pinball.tier: 'default(extauthz.tier, null)'
+      pinball.reason: 'default(extauthz.reason, null)'
+{{- if .Config.OTel.Enabled }}
   tracing:
     host: {{ .Config.OTel.Endpoint }}
     protocol: {{ .Config.OTel.ProtocolOrDefault }}

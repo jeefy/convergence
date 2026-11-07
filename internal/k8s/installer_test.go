@@ -371,8 +371,21 @@ func TestRenderManifestsExposesPinballHeaders(t *testing.T) {
 	}
 }
 
+func TestAccessLogPinballAttributes(t *testing.T) {
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"})
+	for _, k := range []string{"pinball.model:", "pinball.tier:", "pinball.reason:"} {
+		if !strings.Contains(c, k) {
+			t.Errorf("missing %s in:\n%s", k, c)
+		}
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOTelTracing(t *testing.T) {
-	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"}), "frontendPolicies") {
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"}), "tracing:") {
 		t.Errorf("tracing must not render without otel endpoint")
 	}
 	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OTel: config.OTel{Endpoint: "otel.mon.svc:4317"}})
