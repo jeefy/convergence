@@ -237,7 +237,9 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 ## Pinball optimizer
 
-Pinball can replay sampled historical requests against candidate models and re-rank models within a tier. In the cluster, `cluster install --optimizer-dsn ...` adds a CronJob that runs weekly by default (`0 3 * * 0`, Sundays 03:00; change with `--opt-schedule`). Without `--optimizer-dsn` there's no CronJob. Locally, `convergence optimize --db-dsn ...` runs it on demand. The optimizer is experimental and opt-in; replays make real model calls. See the [Pinball docs](https://github.com/jeefy/pinball).
+Pinball can replay sampled historical requests against candidate models and re-rank models within a tier. In the cluster, `cluster install --optimizer-dsn ...` adds a CronJob that runs weekly by default (`0 3 * * 0`, Sundays 03:00; change with `--opt-schedule`). Without `--optimizer-dsn` there's no CronJob. Locally, `convergence optimize --db-dsn ...` runs it on demand.
+
+To make the local stack feed the optimizer, give agentgateway a Postgres you operate (reachable from the containers, e.g. `host.docker.internal`): `convergence init --request-log-db postgres://user:pass@host.docker.internal:5432/agentgateway && convergence restart`. The DSN goes to the 0600 `.env` and `config.yaml`, never into the rendered agentgateway config. `convergence optimize` then uses it without `--db-dsn`. **Privacy:** this logs every request with LLM logging `full`, so the database stores prompts and completions (after Stand-In scrubbing, which is pattern-based and not a guarantee). Protect and expire that database accordingly. It is off by default; the compose stack does not ship Postgres. The Kubernetes install does not render the request-log database yet. The optimizer is experimental and opt-in; replays make real model calls. See the [Pinball docs](https://github.com/jeefy/pinball).
 
 ## Security model
 

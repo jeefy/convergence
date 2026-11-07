@@ -31,7 +31,7 @@ Run `make lint` and `go test -race ./...` before declaring work done. Never comm
 - **Pinned images** (change all places together, see CONTRIBUTING): agentgateway `v1.6.0`, stand-in `0.6.0`, pinball `0.7.4`, copilot-api `v0.7.0` (reads `GH_TOKEN`; `v0.1.25` never existed).
 - **No cost estimates anywhere.** `stats` reads Prometheus metrics (agentgateway :15020, Stand-In :9102, Pinball :9201). Do not fabricate numbers.
 - **Client config writers** must keep user comments and other keys (JSONC-safe text edits, `yaml.Node` for YAML), write atomically, back up to `<file>.convergence.bak` and restore safely. Only unverified-against-docs keys are bugs: check the client's docs before adding or changing one. Cursor has no file-based override and is intentionally unsupported.
-- The optimizer (`convergence optimize`, k8s CronJob) is experimental and opt-in. It needs agentgateway's Postgres request log (`PINBALL_OPT_DB_DSN`); there is no local Postgres.
+- The optimizer (`convergence optimize`, k8s CronJob) is experimental and opt-in. It needs agentgateway's Postgres request log (`PINBALL_OPT_DB_DSN`); the local stack ships no Postgres (`init --request-log-db` points agentgateway at yours, logging `full` = prompts stored).
 
 ## Testing notes
 

@@ -158,6 +158,9 @@ func RenderEnv(cfg *config.Config) []byte {
 	var b bytes.Buffer
 	b.WriteString("# Secrets for the convergence compose stack. Keep this file 0600.\n")
 	env := [][2]string{{"STANDIN_SALT", cfg.StandinSalt}}
+	if cfg.RequestLogDB != "" {
+		env = append(env, [2]string{"REQUEST_LOG_DB_URL", cfg.RequestLogDB})
+	}
 	switch cfg.Provider {
 	case config.ProviderCopilot:
 		env = append(env, [2]string{"GH_TOKEN", cfg.CopilotToken})
