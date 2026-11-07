@@ -123,6 +123,9 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 		return fmt.Errorf("chmod target dir: %w", err)
 	}
 
+	if err := cfg.OTel.Validate(); err != nil {
+		return err
+	}
 	res, err := models.ForConfig(cfg, targetDir)
 	if err != nil {
 		return err

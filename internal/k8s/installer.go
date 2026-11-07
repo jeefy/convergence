@@ -24,11 +24,12 @@ type ClusterOptions struct {
 	StandinSalt   string
 	OptimizerDSN  string // when set, renders the optimizer CronJob + overlay PVC
 	OptSchedule   string
-	FailOpen      bool   // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
-	OpenAIBaseURL string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
-	ModelsFile    string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
-	IngressHost   string // when set, renders an Ingress resource pointing to agentgateway:3000
-	EnablePDB     bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	FailOpen      bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OTel          config.OTel // optional OTLP trace export
+	OpenAIBaseURL string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	ModelsFile    string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost   string      // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB     bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
 	DryRun        bool
 
 	ImageAgentGateway string
@@ -38,6 +39,9 @@ type ClusterOptions struct {
 }
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
+	if err := opts.OTel.Validate(); err != nil {
+		return "", err
+	}
 	switch opts.Provider {
 	case "copilot", "direct":
 	default:
