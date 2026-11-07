@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- agentgateway now returns Pinball's pick on every `auto`/`pinball` response as headers `x-pinball-model`, `x-pinball-tier` and `x-pinball-reason` (a `transformations.response` policy reading ext_authz metadata; local and cluster). The body's `model` still names the real upstream model, so clients that compare it to the requested `auto` can read the header instead of reporting a route change.
 - `models.yaml`: optional `pinball:` block (`thresholds`, `scoring`) overrides Pinball's score cutoffs and per-signal points, rendered into `pinball.yaml` (local and cluster ConfigMap). Defaults unchanged; unknown keys and invalid cutoff order are errors.
 
 ### Fixed
