@@ -288,6 +288,34 @@ func TestAgentgatewayExposesPinballPickAsResponseHeaders(t *testing.T) {
 	}
 }
 
+func TestPassthroughRendered(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	y := "passthrough:\n  glm-5.2: {provider: ollama, model: glm-5.2}\n  fable: {provider: copilot, model: claude-fable-5}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "agentgateway.yaml"))
+	ag := string(b)
+	for _, want := range []string{
+		"- name: glm-5.2\n      provider: {reference: ollama-local}\n      params: {model: glm-5.2}",
+		"- name: fable\n      provider: {reference: copilot-completions}\n      params: {model: claude-fable-5}",
+		"- name: ollama-local",   // provider rendered because a passthrough uses it
+		`in ["auto", "pinball"]`, // pinball only runs for these names
+	} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if strings.Contains(ag, "- name: fable\n      visibility") {
+		t.Error("passthrough must be public")
+	}
+}
+
 func TestAccessLogPinballAttributes(t *testing.T) {
 	_, files := render(t, func(c *config.Config) {})
 	var parsed struct {

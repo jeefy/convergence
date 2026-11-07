@@ -14,6 +14,7 @@ type entry struct {
 }
 
 type templateData struct {
+	Passthrough []entry
 	*ClusterOptions
 	R            *models.Resolved
 	Entries      []entry
@@ -56,5 +57,18 @@ func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {
 		}
 		d.Entries = append(d.Entries, entry{m.PinballName, ref, m.UpstreamModel, m.PromptTokens})
 	}
+	for _, p := range res.Passthrough {
+		d.Passthrough = append(d.Passthrough, entry{Name: p.Name, Ref: refFor(p.Provider), Upstream: p.Model})
+	}
 	return d
+}
+
+func refFor(family string) string {
+	switch family {
+	case models.UpstreamOpenAI:
+		return "openai-direct"
+	case models.UpstreamAnthropic:
+		return "anthropic-direct"
+	}
+	return "copilot-completions"
 }

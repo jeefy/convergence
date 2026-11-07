@@ -140,6 +140,18 @@ ollama:
 
 Only `copilot`, `direct` and `ollama` are valid provider keys, and only the three pinball model names above are valid. An invalid file is an error. Re-run `convergence restart` after editing. For Ollama you can instead set tiers at init with `--ollama-model-light`, `--ollama-model-standard` and `--ollama-model-heavy`; `models.yaml` wins over those flags. In cluster mode pass the same file with `cluster install --models-file models.yaml`.
 
+#### Passthrough models
+
+To call a fixed model by name (no Pinball routing), add a `passthrough:` block. The client uses the key as the model name; Stand-In still scrubs the request and the `x-pinball-*` response headers stay empty.
+
+```yaml
+passthrough:
+  copilot-fable-5: {provider: copilot, model: claude-fable-5}
+  glm-5.2:         {provider: ollama,  model: glm-5.2}
+```
+
+`provider` is `copilot`, `openai`, `anthropic` or `ollama`. Names must not be `auto`, `pinball`, `light`, `standard`, `heavy` or start with `pinball-`. On a cluster install, `ollama` is not available and `copilot` needs `--provider copilot`.
+
 Pinball's score cutoffs and per-signal points can be overridden in an optional top-level `pinball:` block of the same file (unset keys keep pinball's defaults; unknown keys are an error). Example: Pinball adds `+1` for requests with tools, which with the default `thresholds.standard: 1` puts every tool-using agent request in `standard`. To let short agent turns reach `light`:
 
 ```yaml

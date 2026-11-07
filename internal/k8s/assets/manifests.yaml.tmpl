@@ -167,6 +167,11 @@ stringData:
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
 {{- end }}
+{{- range .Passthrough }}
+        - name: {{ .Name }}
+          provider: {reference: {{ .Ref }}}
+          params: {model: {{ .Upstream }}}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
