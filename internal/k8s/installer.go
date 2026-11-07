@@ -57,6 +57,7 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 
 	var override *models.Overrides
 	var pinball *models.Pinball
+	var passthrough []models.Passthrough
 	if opts.ModelsFile != "" {
 		raw, err := os.ReadFile(opts.ModelsFile)
 		if err != nil {
@@ -70,10 +71,19 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 		if pinball, err = models.ParsePinball(raw); err != nil {
 			return "", err
 		}
+		if passthrough, err = models.ParsePassthrough(raw); err != nil {
+			return "", err
+		}
 	}
 	res, err := models.Resolve(config.ProviderType(opts.Provider), override)
 	if err != nil {
 		return "", err
+	}
+	res.Passthrough = passthrough
+	for _, p := range passthrough {
+		if p.Provider == models.UpstreamOllama || (p.Provider == models.UpstreamCopilot && opts.Provider != "copilot") {
+			return "", fmt.Errorf("models.yaml: passthrough.%s: provider %s is not available on this cluster install", p.Name, p.Provider)
+		}
 	}
 	if err := res.ApplyPinball(pinball); err != nil {
 		return "", err

@@ -22,7 +22,8 @@ func ParseOverrides(data []byte) (Overrides, error) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing models.yaml: %w", err)
 	}
-	delete(raw, "pinball") // handled by ParsePinball
+	delete(raw, "pinball")     // handled by ParsePinball
+	delete(raw, "passthrough") // handled by ParsePassthrough
 	o := Overrides{}
 	for k, n := range raw {
 		var m map[string]string
@@ -73,6 +74,13 @@ func ForConfig(cfg *config.Config, dir string) (*Resolved, error) {
 	}
 	pb, err := loadPinball(dir)
 	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("reading models.yaml: %w", err)
+	}
+	if res.Passthrough, err = ParsePassthrough(data); err != nil {
 		return nil, err
 	}
 	return res, res.ApplyPinball(pb)

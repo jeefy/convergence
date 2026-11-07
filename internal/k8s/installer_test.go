@@ -369,3 +369,25 @@ func TestRenderManifestsExposesPinballHeaders(t *testing.T) {
 		t.Error("missing x-pinball-model response header")
 	}
 }
+
+func TestModelsFilePassthrough(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "m.yaml")
+	y := "passthrough:\n  fable: {provider: copilot, model: claude-fable-5}\n"
+	if err := os.WriteFile(f, []byte(y), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", ModelsFile: f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "- name: fable\n          provider: {reference: copilot-completions}\n          params: {model: claude-fable-5}") {
+		t.Errorf("passthrough missing:\n%s", out)
+	}
+	if !strings.Contains(out, `in ["auto", "pinball"]`) {
+		t.Error("pinball condition changed")
+	}
+	// copilot passthrough on a direct install has no provider to serve it
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: f}); err == nil {
+		t.Error("want error for copilot passthrough on direct")
+	}
+}

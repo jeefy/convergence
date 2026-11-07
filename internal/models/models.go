@@ -50,6 +50,8 @@ type Resolved struct {
 	Scoring map[string]int
 	// Fallback is the PinballName used when pinball is unreachable.
 	Fallback string
+	// Passthrough are fixed-name models without Pinball (models.yaml `passthrough:`).
+	Passthrough []Passthrough
 }
 
 // Thresholds are pinball's score cutoffs (pinball 0.7.4 schema).
@@ -268,6 +270,11 @@ func validateOverrides(o Overrides) error {
 func (r *Resolved) UsesFamily(family string) bool {
 	for _, m := range r.Models {
 		if m.UpstreamProvider == family {
+			return true
+		}
+	}
+	for _, p := range r.Passthrough {
+		if p.Provider == family {
 			return true
 		}
 	}

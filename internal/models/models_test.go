@@ -147,3 +147,33 @@ func TestPinballBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestPassthroughBlock(t *testing.T) {
+	good := []byte("passthrough:\n  glm-5.2: {provider: ollama, model: glm-5.2}\n  fable: {provider: copilot, model: claude-fable-5}\n")
+	if _, err := ParseOverrides(good); err != nil {
+		t.Fatal(err)
+	}
+	p, err := ParsePassthrough(good)
+	if err != nil || len(p) != 2 || p[0].Name != "fable" || p[1].Provider != "ollama" {
+		t.Fatalf("%v %+v", err, p)
+	}
+	r, _ := Resolve(config.ProviderCopilot, nil)
+	if r.UsesFamily("ollama") {
+		t.Fatal("ollama unexpectedly used")
+	}
+	r.Passthrough = p
+	if !r.UsesFamily("ollama") {
+		t.Error("UsesFamily ignores passthrough")
+	}
+	for name, y := range map[string]string{
+		"collision":    "passthrough:\n  auto: {provider: copilot, model: x}\n",
+		"pinball-pfx":  "passthrough:\n  pinball-x: {provider: copilot, model: x}\n",
+		"bad provider": "passthrough:\n  a: {provider: gemini, model: x}\n",
+		"empty model":  "passthrough:\n  a: {provider: copilot, model: ' '}\n",
+		"unknown key":  "passthrough:\n  a: {provider: copilot, model: x, foo: 1}\n",
+	} {
+		if _, err := ParsePassthrough([]byte(y)); err == nil {
+			t.Errorf("%s: want error", name)
+		}
+	}
+}
