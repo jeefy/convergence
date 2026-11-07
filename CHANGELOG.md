@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- copilot-api: fold `max_completion_tokens` into `max_tokens` (same preloaded shim). copilot-api fills in `max_tokens` when it is missing, so any request carrying `max_completion_tokens` (the current OpenAI parameter, sent by default by clients like OpenClaw) reached Copilot with both and failed with 400 `max_tokens and max_completion_tokens cannot both be set`.
+
 ## [0.1.4] - 2026-11-06
 
 ### Changed
