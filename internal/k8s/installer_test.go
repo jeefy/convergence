@@ -359,3 +359,13 @@ func TestModelsFilePinballOverride(t *testing.T) {
 		t.Error("defaults changed")
 	}
 }
+
+func TestRenderManifestsExposesPinballHeaders(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `x-pinball-model: 'default(extauthz.model, "")'`) {
+		t.Error("missing x-pinball-model response header")
+	}
+}
