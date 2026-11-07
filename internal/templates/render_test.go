@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -312,5 +313,35 @@ func TestPassthroughRendered(t *testing.T) {
 	}
 	if strings.Contains(ag, "- name: fable\n      visibility") {
 		t.Error("passthrough must be public")
+	}
+}
+
+func TestOTelTracingOffByDefaultAndRenderedWhenSet(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "tracing:") {
+		t.Errorf("tracing must not render without otel.endpoint")
+	}
+	_, files = render(t, func(c *config.Config) { c.OTel = config.OTel{Endpoint: "collector:4317"} })
+	ag := files["agentgateway.yaml"]
+	for _, want := range []string{"frontendPolicies:", "host: collector:4317", "protocol: grpc", "randomSampling: 1", `service.name: '"convergence"'`, "caller:", "pinball.tier:"} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("missing %q in:\n%s", want, ag)
+		}
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(ag), &parsed); err != nil {
+		t.Fatalf("rendered config is not YAML: %v", err)
+	}
+	_, files = render(t, func(c *config.Config) { c.OTel = config.OTel{Endpoint: "c:4318", Protocol: "http", Sample: 0.25} })
+	if ag := files["agentgateway.yaml"]; !strings.Contains(ag, "protocol: http") || !strings.Contains(ag, "randomSampling: 0.25") {
+		t.Errorf("protocol/sample not rendered:\n%s", ag)
+	}
+}
+
+func TestOTelInvalidRejected(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.OTel = config.OTel{Endpoint: "c:1", Protocol: "udp"}
+	if err := RenderAssets(cfg, t.TempDir()); err == nil {
+		t.Errorf("invalid protocol must fail")
 	}
 }

@@ -31,6 +31,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Optional OTLP trace export: `otel.endpoint` (+ `protocol` grpc|http, `sample`) in config, `--otel-endpoint/--otel-protocol/--otel-sample` on `init` and `cluster install`. Renders `frontendPolicies.tracing` (service `convergence`, attributes `caller`, `pinball.tier|model|reason`) for compose and Kubernetes. Unset = rendered files unchanged.
 - Model tier routes: virtual models `light`, `standard`, and `heavy` exposed directly in gateway configs without requiring `x-pinball-tier` header overrides.
 - Client configs: support for Zed (`convergence config zed`) and Cline / Roo Code (`convergence config cline`), plus tier model exports (`convergence/light`, `convergence/standard`, `convergence/heavy`) for OpenCode, Continue, and Hermes.
 - Model mapping: support multi-provider mixing in `models.yaml` (e.g. `ollama:` for light tier and `anthropic:` for heavy tier) and dynamic upstream instantiation in gateway templates.

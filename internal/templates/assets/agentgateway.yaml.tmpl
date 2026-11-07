@@ -7,6 +7,21 @@ config:
   logging:
     format: json
 
+{{- if .Config.OTel.Enabled }}
+frontendPolicies:
+  tracing:
+    host: {{ .Config.OTel.Endpoint }}
+    protocol: {{ .Config.OTel.ProtocolOrDefault }}
+    randomSampling: {{ .Config.OTel.SampleOrDefault }}
+    resources:
+      service.name: '"convergence"'
+    attributes:
+      caller: 'default(request.headers["x-agw-caller"], "")'
+      pinball.tier: 'default(extauthz.tier, "")'
+      pinball.model: 'default(extauthz.model, "")'
+      pinball.reason: 'default(extauthz.reason, "")'
+{{- end }}
+
 gateways:
   default:
     port: 3000

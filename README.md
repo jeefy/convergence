@@ -251,6 +251,27 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 Pinball can replay sampled historical requests against candidate models and re-rank models within a tier. In the cluster, `cluster install --optimizer-dsn ...` adds a CronJob that runs weekly by default (`0 3 * * 0`, Sundays 03:00; change with `--opt-schedule`). Without `--optimizer-dsn` there's no CronJob. Locally, `convergence optimize --db-dsn ...` runs it on demand. The optimizer is experimental and opt-in; replays make real model calls. See the [Pinball docs](https://github.com/jeefy/pinball).
 
+## Observability
+
+Optional OTLP trace export, off by default. Convergence only configures the export; you run the collector or backend (OpenTelemetry Collector, Jaeger, Langfuse, Phoenix, Grafana Tempo, ...).
+
+```bash
+convergence init --otel-endpoint localhost:4317               # local (gRPC)
+convergence init --otel-endpoint collector:4318 --otel-protocol http --otel-sample 0.25
+convergence cluster install --provider copilot --otel-endpoint otel-collector.monitoring:4317
+```
+
+Or in `~/.convergence/config.yaml`:
+
+```yaml
+otel:
+  endpoint: localhost:4317   # host:port; unset = no tracing
+  protocol: grpc             # grpc (default) or http
+  sample: 1                  # 0..1, default 1
+```
+
+Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request/response model, input/output tokens) plus `caller` (from the `x-agw-caller` request header) and `pinball.tier`, `pinball.model`, `pinball.reason` for `model: auto` requests. Traces carry metadata only, never prompts or completions. Note that agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`; a proxy in its environment can break OTLP delivery. From a container, use `host.docker.internal:4317` to reach a collector on the host.
+
 ## Security model
 
 What Stand-In does:

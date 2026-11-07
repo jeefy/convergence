@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jeefy/convergence/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -389,5 +390,20 @@ func TestModelsFilePassthrough(t *testing.T) {
 	// copilot passthrough on a direct install has no provider to serve it
 	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: f}); err == nil {
 		t.Error("want error for copilot passthrough on direct")
+	}
+}
+
+func TestOTelTracing(t *testing.T) {
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"}), "tracing:") {
+		t.Errorf("tracing must not render without otel endpoint")
+	}
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OTel: config.OTel{Endpoint: "otel.mon.svc:4317"}})
+	for _, want := range []string{"frontendPolicies:", "host: otel.mon.svc:4317", "protocol: grpc", `service.name: '"convergence"'`} {
+		if !strings.Contains(c, want) {
+			t.Errorf("missing %q in:\n%s", want, c)
+		}
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", OTel: config.OTel{Endpoint: "c:1", Sample: 2}}); err == nil {
+		t.Errorf("sample > 1 must fail")
 	}
 }
