@@ -369,3 +369,16 @@ func TestRenderManifestsExposesPinballHeaders(t *testing.T) {
 		t.Error("missing x-pinball-model response header")
 	}
 }
+
+func TestAccessLogPinballAttributes(t *testing.T) {
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"})
+	for _, k := range []string{"pinball.model:", "pinball.tier:", "pinball.reason:"} {
+		if !strings.Contains(c, k) {
+			t.Errorf("missing %s in:\n%s", k, c)
+		}
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatal(err)
+	}
+}

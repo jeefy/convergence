@@ -7,6 +7,14 @@ config:
   logging:
     format: json
 
+# Lets pinball-optimize find routed requests (attributes_json->>'pinball.tier').
+frontendPolicies:
+  accessLog:
+    add:
+      pinball.model: 'default(extauthz.model, null)'
+      pinball.tier: 'default(extauthz.tier, null)'
+      pinball.reason: 'default(extauthz.reason, null)'
+
 gateways:
   default:
     port: 3000

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -283,6 +284,25 @@ func TestAgentgatewayExposesPinballPickAsResponseHeaders(t *testing.T) {
 	for _, h := range []string{"x-pinball-model", "x-pinball-tier", "x-pinball-reason"} {
 		if !strings.Contains(files["agentgateway.yaml"], h+`: 'default(extauthz.`) {
 			t.Errorf("agentgateway config missing response header %s", h)
+		}
+	}
+}
+
+func TestAccessLogPinballAttributes(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	var parsed struct {
+		FrontendPolicies struct {
+			AccessLog struct {
+				Add map[string]string `yaml:"add"`
+			} `yaml:"accessLog"`
+		} `yaml:"frontendPolicies"`
+	}
+	if err := yaml.Unmarshal([]byte(files["agentgateway.yaml"]), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"pinball.model", "pinball.tier", "pinball.reason"} {
+		if !strings.Contains(parsed.FrontendPolicies.AccessLog.Add[k], "extauthz.") {
+			t.Errorf("accessLog.add[%s] missing: %v", k, parsed.FrontendPolicies.AccessLog.Add)
 		}
 	}
 }
