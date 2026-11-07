@@ -16,27 +16,36 @@ import (
 var k8sAssets embed.FS
 
 type ClusterOptions struct {
-	Namespace     string
-	Provider      string
-	CopilotToken  string
-	OpenAIKey     string
-	AnthropicKey  string
-	StandinSalt   string
-	OptimizerDSN  string // when set, renders the optimizer CronJob + overlay PVC
-	OptSchedule   string
-	FailOpen      bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
-	OTel          config.OTel // optional OTLP trace export
-	OpenAIBaseURL string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
-	ModelsFile    string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
-	IngressHost   string      // when set, renders an Ingress resource pointing to agentgateway:3000
-	EnablePDB     bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
-	DryRun        bool
+	Namespace    string
+	Provider     string
+	CopilotToken string
+	OpenAIKey    string
+	AnthropicKey string
+	StandinSalt  string
+	OptimizerDSN string // when set, renders the optimizer CronJob + overlay PVC
+	OptSchedule  string
+	FailOpen     bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OTel         config.OTel // optional OTLP trace export
+	// RequestLogDB is an external Postgres DSN; RequestLogPostgres renders one in-cluster.
+	// Either enables agentgateway's request log (llm: full) and the optimizer CronJob.
+	RequestLogDB         string
+	RequestLogPostgres   bool
+	RequestLogPGPassword string // generated when empty; reuse the existing one on re-install (PVC keeps the old one)
+	RequestLogPGSize     string
+	OpenAIBaseURL        string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	ModelsFile           string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost          string // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB            bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	DryRun               bool
 
 	ImageAgentGateway string
 	ImageStandIn      string
 	ImagePinball      string
 	ImageCopilotAPI   string
 }
+
+// RequestLogEnabled reports whether agentgateway writes the Postgres request log.
+func (o *ClusterOptions) RequestLogEnabled() bool { return o.RequestLogDB != "" }
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
 	if err := opts.OTel.Validate(); err != nil {
@@ -54,6 +63,21 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 
 	if opts.StandinSalt == "" {
 		opts.StandinSalt, _ = config.GenerateSalt()
+	}
+	if opts.RequestLogDB != "" && opts.RequestLogPostgres {
+		return "", fmt.Errorf("--request-log-db and --request-log-postgres are mutually exclusive")
+	}
+	if opts.RequestLogPostgres {
+		if opts.RequestLogPGPassword == "" {
+			opts.RequestLogPGPassword, _ = config.GenerateSalt()
+		}
+		if opts.RequestLogPGSize == "" {
+			opts.RequestLogPGSize = "5Gi"
+		}
+		opts.RequestLogDB = fmt.Sprintf("postgres://convergence:%s@request-log-postgres.%s.svc.cluster.local:5432/agentgateway?sslmode=disable", opts.RequestLogPGPassword, opts.Namespace)
+	}
+	if opts.RequestLogDB != "" {
+		opts.OptimizerDSN = opts.RequestLogDB
 	}
 	if opts.OptSchedule == "" {
 		opts.OptSchedule = "0 3 * * 0" // weekly Sunday 03:00

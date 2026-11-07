@@ -20,7 +20,7 @@ func TestResolveImages_overridesEveryImage(t *testing.T) {
 		ImageAgentGateway: "a", ImageStandIn: "s", ImagePinball: "p",
 		ImageCopilotAPI: "c", ImageOpenShellGateway: "o",
 	}
-	want := Images{AgentGateway: "a", StandIn: "s", Pinball: "p", CopilotAPI: "c", OpenShellGateway: "o"}
+	want := Images{AgentGateway: "a", StandIn: "s", Pinball: "p", CopilotAPI: "c", Postgres: PinnedImages.Postgres, OpenShellGateway: "o"}
 	if got := ResolveImages(cfg); got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
