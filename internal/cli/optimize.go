@@ -18,9 +18,16 @@ var optimizeCmd = &cobra.Command{
 requests from agentgateway's Postgres request log, replays them against candidate
 models in their tier through the gateway, and re-ranks models within tiers.
 
-The local compose stack does not run Postgres or log requests to a database, so
-this command requires --db-dsn pointing at an agentgateway request-log database
-reachable from a container (use host.docker.internal for services on this host).`,
+The local compose stack does not run Postgres. Point it at one you operate, reachable
+from a container (use host.docker.internal for services on this host):
+
+  convergence init --request-log-db <postgres-dsn>
+  convergence restart
+
+This makes agentgateway write every request to that database with LLM logging
+"full", which STORES PROMPTS AND COMPLETIONS (after Stand-In scrubbing) so the
+optimizer can replay them. Without it, pass --db-dsn to read an existing
+request-log database. Off by default.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, err := cmd.Flags().GetBool("dry-run")
 		if err != nil {
@@ -34,15 +41,18 @@ reachable from a container (use host.docker.internal for services on this host).
 		if err != nil {
 			return err
 		}
-		if dsn == "" {
-			return errors.New("optimize is EXPERIMENTAL and needs agentgateway's Postgres request log, which the local stack does not provide; pass --db-dsn postgres://user:pass@host:5432/agentgateway")
-		}
 		if err := requireInit(); err != nil {
 			return err
 		}
 		s, err := loadStack()
 		if err != nil {
 			return err
+		}
+		if dsn == "" {
+			dsn = s.cfg.RequestLogDB
+		}
+		if dsn == "" {
+			return errors.New("optimize is EXPERIMENTAL and needs agentgateway's Postgres request log: run 'convergence init --request-log-db <postgres-dsn>' or pass --db-dsn")
 		}
 
 		runArgs := []string{
@@ -82,6 +92,6 @@ reachable from a container (use host.docker.internal for services on this host).
 func init() {
 	optimizeCmd.Flags().Bool("dry-run", false, "Sample and plan without executing replay model calls")
 	optimizeCmd.Flags().Bool("check-revert", false, "Check if recent model re-ranking regressed and revert if needed")
-	optimizeCmd.Flags().String("db-dsn", "", "Postgres DSN of the agentgateway request log (required)")
+	optimizeCmd.Flags().String("db-dsn", "", "Postgres DSN of the agentgateway request log (default: request_log_db from config)")
 	rootCmd.AddCommand(optimizeCmd)
 }

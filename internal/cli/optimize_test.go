@@ -79,3 +79,14 @@ func TestOptimize_when_runFails(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestOptimize_usesConfiguredRequestLogDB(t *testing.T) {
+	e := newFakeEnv(t, "docker")
+	e.saveCfg(t, func(c *config.Config) { c.RequestLogDB = testDSN })
+	if err := runCLI(t, "optimize", "--dry-run"); err != nil {
+		t.Fatal(err)
+	}
+	if calls := e.calls(t); !strings.Contains(calls, "pinball-optimize") || strings.Contains(calls, "postgres://") {
+		t.Errorf("unexpected calls: %s", calls)
+	}
+}

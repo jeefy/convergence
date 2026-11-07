@@ -82,6 +82,10 @@ type Config struct {
 	// FailOpen lets requests continue UNSCRUBBED when Stand-In is down.
 	// Default false: the gateway rejects them (fail-closed).
 	FailOpen bool `yaml:"fail_open,omitempty"`
+	// RequestLogDB is a Postgres DSN for agentgateway's request log, needed by
+	// `convergence optimize`. Empty = off. Logging is "full", so the database
+	// holds prompts and completions: treat the DSN and the database as secret.
+	RequestLogDB string `yaml:"request_log_db,omitempty"`
 	// OTel enables OTLP trace export (off unless otel.endpoint is set).
 	OTel OTel `yaml:"otel,omitempty"`
 	// Ollama model overrides per tier ("" = internal/models default).
