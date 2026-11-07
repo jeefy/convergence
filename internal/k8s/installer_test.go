@@ -391,7 +391,6 @@ func TestModelsFilePassthrough(t *testing.T) {
 	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: f}); err == nil {
 		t.Error("want error for copilot passthrough on direct")
 	}
-	}
 }
 
 func TestAccessLogPinballAttributes(t *testing.T) {
