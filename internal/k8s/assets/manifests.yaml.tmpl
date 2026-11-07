@@ -47,6 +47,19 @@ stringData:
           pinball.model: 'default(extauthz.model, null)'
           pinball.tier: 'default(extauthz.tier, null)'
           pinball.reason: 'default(extauthz.reason, null)'
+{{- if .OTel.Enabled }}
+      tracing:
+        host: {{ .OTel.Endpoint }}
+        protocol: {{ .OTel.ProtocolOrDefault }}
+        randomSampling: {{ .OTel.SampleOrDefault }}
+        resources:
+          service.name: '"convergence"'
+        attributes:
+          caller: 'default(request.headers["x-agw-caller"], "")'
+          pinball.tier: 'default(extauthz.tier, "")'
+          pinball.model: 'default(extauthz.model, "")'
+          pinball.reason: 'default(extauthz.reason, "")'
+{{- end }}
     gateways:
       default:
         port: 3000
