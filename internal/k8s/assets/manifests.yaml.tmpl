@@ -41,8 +41,13 @@ stringData:
       connectionTerminationDeadline: 600s
       logging:
         format: json
-{{- if .OTel.Enabled }}
     frontendPolicies:
+      accessLog:
+        add:
+          pinball.model: 'default(extauthz.model, null)'
+          pinball.tier: 'default(extauthz.tier, null)'
+          pinball.reason: 'default(extauthz.reason, null)'
+{{- if .OTel.Enabled }}
       tracing:
         host: {{ .OTel.Endpoint }}
         protocol: {{ .OTel.ProtocolOrDefault }}
