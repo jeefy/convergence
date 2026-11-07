@@ -16,21 +16,22 @@ import (
 var k8sAssets embed.FS
 
 type ClusterOptions struct {
-	Namespace     string
-	Provider      string
-	CopilotToken  string
-	OpenAIKey     string
-	AnthropicKey  string
-	StandinSalt   string
-	OptimizerDSN  string // when set, renders the optimizer CronJob + overlay PVC
-	OptSchedule   string
-	FailOpen      bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
-	OTel          config.OTel // optional OTLP trace export
-	OpenAIBaseURL string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
-	ModelsFile    string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
-	IngressHost   string      // when set, renders an Ingress resource pointing to agentgateway:3000
-	EnablePDB     bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
-	DryRun        bool
+	Namespace         string
+	Provider          string
+	CopilotToken      string
+	OpenAIKey         string
+	AnthropicKey      string
+	StandinSalt       string
+	OptimizerDSN      string // when set, renders the optimizer CronJob + overlay PVC
+	OptSchedule       string
+	FailOpen          bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OTel              config.OTel // optional OTLP trace export
+	OpenAIBaseURL     string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	ModelsFile        string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost       string      // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB         bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	PassthroughSecret string      // existing Secret whose keys are the passthrough api_key_env names
+	DryRun            bool
 
 	ImageAgentGateway string
 	ImageStandIn      string
@@ -54,6 +55,9 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 
 	if opts.StandinSalt == "" {
 		opts.StandinSalt, _ = config.GenerateSalt()
+	}
+	if opts.PassthroughSecret == "" {
+		opts.PassthroughSecret = "convergence-passthrough"
 	}
 	if opts.OptSchedule == "" {
 		opts.OptSchedule = "0 3 * * 0" // weekly Sunday 03:00
@@ -85,7 +89,7 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	}
 	res.Passthrough = passthrough
 	for _, p := range passthrough {
-		if p.Provider == models.UpstreamOllama || (p.Provider == models.UpstreamCopilot && opts.Provider != "copilot") {
+		if (p.Provider == models.UpstreamOllama && p.BaseURL == "") || (p.Provider == models.UpstreamCopilot && opts.Provider != "copilot") {
 			return "", fmt.Errorf("models.yaml: passthrough.%s: provider %s is not available on this cluster install", p.Name, p.Provider)
 		}
 	}

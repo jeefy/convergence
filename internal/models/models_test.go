@@ -191,3 +191,16 @@ func TestResolvedTierHelpers(t *testing.T) {
 		t.Errorf("Error(): %s", e)
 	}
 }
+
+func TestPassthroughEndpointValidation(t *testing.T) {
+	for _, y := range []string{
+		"passthrough:\n  a: {provider: ollama, model: m, api_key_env: sk-abc123}\n",
+		"passthrough:\n  a: {provider: ollama, model: m, api_key_env: OPENAI_API_KEY}\n",
+		"passthrough:\n  a: {provider: ollama, model: m, base_url: ollama.com}\n",
+		"passthrough:\n  a: {provider: copilot, model: m, base_url: 'https://x'}\n",
+	} {
+		if _, err := ParsePassthrough([]byte(y)); err == nil {
+			t.Errorf("want error for %q", y)
+		}
+	}
+}

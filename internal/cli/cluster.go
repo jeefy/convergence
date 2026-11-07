@@ -32,6 +32,7 @@ var clusterInstallCmd = &cobra.Command{
 		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
+		ptSecret, _ := cmd.Flags().GetString("passthrough-secret")
 		ingressHost, _ := cmd.Flags().GetString("ingress-host")
 		enablePDB, _ := cmd.Flags().GetBool("enable-pdb")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
@@ -52,6 +53,7 @@ var clusterInstallCmd = &cobra.Command{
 			OTel:              config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
 			OpenAIBaseURL:     openaiBase,
 			ModelsFile:        modelsFile,
+			PassthroughSecret: ptSecret,
 			IngressHost:       ingressHost,
 			EnablePDB:         enablePDB,
 			DryRun:            dryRun,
@@ -161,6 +163,7 @@ func init() {
 	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
+	clusterInstallCmd.Flags().String("passthrough-secret", "convergence-passthrough", "Existing Secret in the namespace whose keys are the passthrough api_key_env names")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")
 	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")

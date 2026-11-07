@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -22,6 +23,7 @@ type Images struct {
 	StandIn          string
 	Pinball          string
 	CopilotAPI       string
+	Postgres         string
 	OpenShellGateway string
 }
 
@@ -30,7 +32,9 @@ var PinnedImages = Images{
 	StandIn:      "ghcr.io/jeefy/stand-in:0.6.0@sha256:39db3c7318d49b9e6d2f7bde7ec2c7828522437dddbc02b0a1bd9c07b391c2b2",
 	Pinball:      "ghcr.io/jeefy/pinball:0.7.4@sha256:0f70fd86a0b1fd1926909df11bfa6d9c388568d01a107c842677af3417be9b4d",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
-	CopilotAPI:       "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
+	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
+	// In-cluster request-log database (cluster install --request-log-postgres); uid 70 is the alpine postgres user.
+	Postgres:         "postgres:17-alpine",
 	OpenShellGateway: "ghcr.io/nvidia/openshell/gateway:latest",
 }
 
@@ -153,7 +157,8 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 			return err
 		}
 	}
-	return writeFile(filepath.Join(targetDir, EnvFile), RenderEnv(cfg), 0o600)
+	envPath := filepath.Join(targetDir, EnvFile)
+	return writeFile(envPath, append(RenderEnv(cfg), passthroughEnv(res.KeyEnvs(), envPath)...), 0o600)
 }
 
 // RenderEnv returns the compose .env content carrying every secret.
@@ -176,6 +181,29 @@ func RenderEnv(cfg *config.Config) []byte {
 	for _, kv := range env {
 		// Single quotes: compose takes the value literally (no $ expansion).
 		fmt.Fprintf(&b, "%s='%s'\n", kv[0], kv[1])
+	}
+	return b.Bytes()
+}
+
+// passthroughEnv renders .env lines for passthrough api_key_env names: value from
+// the current environment, else kept from the existing .env (so restart/upgrade
+// do not blank a key), else empty.
+func passthroughEnv(names []string, envPath string) []byte {
+	old := map[string]string{}
+	if b, err := os.ReadFile(envPath); err == nil {
+		for _, l := range strings.Split(string(b), "\n") {
+			if k, v, ok := strings.Cut(l, "="); ok {
+				old[k] = strings.TrimSuffix(strings.TrimPrefix(v, "'"), "'")
+			}
+		}
+	}
+	var b bytes.Buffer
+	for _, n := range names {
+		v := os.Getenv(n)
+		if v == "" {
+			v = old[n]
+		}
+		fmt.Fprintf(&b, "%s='%s'\n", n, v)
 	}
 	return b.Bytes()
 }

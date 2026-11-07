@@ -420,3 +420,30 @@ func TestOTelTracing(t *testing.T) {
 		t.Errorf("sample > 1 must fail")
 	}
 }
+
+func TestModelsFilePassthroughEndpoint(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "m.yaml")
+	y := "passthrough:\n  glm-5.2: {provider: ollama, model: glm-5.2, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}\n"
+	if err := os.WriteFile(f, []byte(y), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", ModelsFile: f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- name: ollama-ep1\n          provider: ollama\n          params:\n            baseUrl: https://ollama.com\n            apiKey: \"${OLLAMA_CLOUD_KEY}\"",
+		"provider: {reference: ollama-ep1}",
+		"- name: OLLAMA_CLOUD_KEY\n              valueFrom:\n                secretKeyRef:\n                  name: convergence-passthrough\n                  key: OLLAMA_CLOUD_KEY",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	// plain ollama (no base_url) is still rejected on a cluster
+	g := filepath.Join(t.TempDir(), "n.yaml")
+	_ = os.WriteFile(g, []byte("passthrough:\n  g: {provider: ollama, model: g}\n"), 0o600)
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", ModelsFile: g}); err == nil {
+		t.Error("want error for ollama without base_url")
+	}
+}
