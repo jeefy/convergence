@@ -329,6 +329,7 @@ func TestCopilotAPIIdleTimeoutShim(t *testing.T) {
 	for _, want := range []string{
 		"name: copilot-api-idle-timeout",
 		"idleTimeout: options.idleTimeout ?? 0",
+		"delete body.max_completion_tokens",
 		`preload = ["/etc/copilot-api/idle-timeout.js"]`,
 		"mountPath: /app/bunfig.toml",
 	} {

@@ -4,5 +4,25 @@
 // agentgateway waits on a dead upstream. copilot-api v0.7.0 has no flag for it
 // (upstream: ericc-ch/copilot-api#153, #268), so preload this shim to disable
 // the idle timeout unless the caller set one explicitly.
+// OpenAI clients send max_completion_tokens (alone or with max_tokens), but
+// copilot-api fills in max_tokens when missing, so Copilot always sees both and
+// rejects with 400 "cannot both be set". Fold it into max_tokens and drop it.
+const dedupe = (fetch) => async (req, server) => {
+  if (req.method === "POST" && new URL(req.url).pathname.endsWith("/chat/completions")) {
+    const text = await req.text();
+    try {
+      const body = JSON.parse(text);
+      if (body && body.max_completion_tokens != null) {
+        body.max_tokens ??= body.max_completion_tokens;
+        delete body.max_completion_tokens;
+        req = new Request(req, { body: JSON.stringify(body) });
+        return fetch(req, server);
+      }
+    } catch {}
+    req = new Request(req, { body: text });
+  }
+  return fetch(req, server);
+};
 const serve = Bun.serve.bind(Bun);
-Bun.serve = (options) => serve({ ...options, idleTimeout: options.idleTimeout ?? 0 });
+Bun.serve = (options) =>
+  serve({ ...options, fetch: dedupe(options.fetch), idleTimeout: options.idleTimeout ?? 0 });
