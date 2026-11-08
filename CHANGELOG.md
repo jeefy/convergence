@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.2.4] - 2026-11-08
+
+### Changed
+
+- Bump pinned Pinball image to `0.7.5` (`ghcr.io/jeefy/pinball:0.7.5@sha256:3e70723ef85ba4f6d80d2f2ece790263f6e7819880c7b4e59ed35b3cbb8b7b17`).
 
 ## [0.2.3] - 2026-11-08
 
