@@ -4,13 +4,21 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-### Fixed
+## [Unreleased]
 
-- Podman: read Compose service names from the `Labels` map instead of the newer `Label` template helper, fixing running-service checks on older distro releases such as Ubuntu 24.04's Podman.
+## [0.2.3] - 2026-11-08
+
+### Changed
+
+- Bump pinned Stand-In image to `0.6.1` (`ghcr.io/jeefy/stand-in:0.6.1@sha256:baa7bd9bb4de581114ba9e58ecc36355703a742b2170e73d8324d61f09134a3e`).
 
 ### Added
 
 - `init --compose-provider auto|docker-compose|podman-compose`: persist the Podman Compose provider in `config.yaml` for lifecycle commands and `doctor`. Empty or `auto` preserves Podman's default selection; explicit choices override `PODMAN_COMPOSE_PROVIDER` and require the provider on `PATH`. Docker Engine is unchanged.
+
+### Fixed
+
+- Podman: read Compose service names from the `Labels` map instead of the newer `Label` template helper, fixing running-service checks on older distro releases such as Ubuntu 24.04's Podman.
 
 ## [0.2.2] - 2026-11-08
 

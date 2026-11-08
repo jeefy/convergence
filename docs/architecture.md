@@ -95,7 +95,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 | Component | Image |
 |---|---|
 | agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2` |
-| Stand-In | `ghcr.io/jeefy/stand-in:0.6.0@sha256:39db3c7318d49b9e6d2f7bde7ec2c7828522437dddbc02b0a1bd9c07b391c2b2` |
+| Stand-In | `ghcr.io/jeefy/stand-in:0.6.1@sha256:baa7bd9bb4de581114ba9e58ecc36355703a742b2170e73d8324d61f09134a3e` |
 | Pinball | `ghcr.io/jeefy/pinball:0.7.4@sha256:0f70fd86a0b1fd1926909df11bfa6d9c388568d01a107c842677af3417be9b4d` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29` |
 | openshell | `ghcr.io/nvidia/openshell/gateway:latest` |
