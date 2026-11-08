@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Added
 
 - `models.yaml` passthrough entries accept `base_url` and `api_key_env` (env var name) for custom endpoints such as Ollama Cloud; one gateway provider per distinct endpoint (local and cluster). Local keys go to the 0600 `.env`; cluster keys come from a user-created Secret (`cluster install --passthrough-secret`, default `convergence-passthrough`). Cluster installs now allow `ollama` passthrough when `base_url` is set.
@@ -105,7 +107,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jeefy/convergence/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/jeefy/convergence/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/jeefy/convergence/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/jeefy/convergence/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/jeefy/convergence/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jeefy/convergence/releases/tag/v0.1.0
