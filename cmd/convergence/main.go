@@ -6,8 +6,11 @@ import (
 	"github.com/jeefy/convergence/internal/cli"
 )
 
+// exit is os.Exit, replaceable so tests can cover main.
+var exit = os.Exit
+
 func main() {
-	os.Exit(run())
+	exit(run())
 }
 
 // run executes the CLI and returns the process exit code. cobra already prints
