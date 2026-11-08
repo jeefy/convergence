@@ -125,7 +125,11 @@ func freePort(t *testing.T) int {
 
 func resetFlags(c *cobra.Command) {
 	c.Flags().VisitAll(func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
+		if sv, ok := f.Value.(pflag.SliceValue); ok {
+			_ = sv.Replace(nil) // Set("[]") would append a literal "[]" element
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
 		f.Changed = false
 	})
 	for _, sub := range c.Commands() {

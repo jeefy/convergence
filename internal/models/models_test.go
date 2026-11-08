@@ -177,3 +177,17 @@ func TestPassthroughBlock(t *testing.T) {
 		}
 	}
 }
+
+func TestResolvedTierHelpers(t *testing.T) {
+	r := &Resolved{Tiers: map[Tier][]string{Tier("light"): {"a", "b"}}}
+	if r.TierModel("light") != "a" || r.TierModel("heavy") != "" {
+		t.Errorf("TierModel wrong")
+	}
+	if r.TierList("light") != "a, b" || r.TierList("heavy") != "" {
+		t.Errorf("TierList wrong")
+	}
+	e := &MissingMappingError{Provider: "copilot", Missing: []string{"x", "y"}}
+	if !strings.Contains(e.Error(), "x, y") {
+		t.Errorf("Error(): %s", e)
+	}
+}
