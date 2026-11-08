@@ -82,8 +82,15 @@ run_suite() {
   export HOME="$TEST_HOME"
   local cfgdir="$TEST_HOME/.convergence"
   local compose_args=()
+  local original_docker_host="${DOCKER_HOST-}" docker_host_set="${DOCKER_HOST+x}"
+  local unavailable_socket="$TEST_HOME/unavailable-podman.sock"
   if [ "$engine" = podman ]; then
     compose_args=(--compose-provider "$COMPOSE_PROVIDER")
+    if [ "$COMPOSE_PROVIDER" = podman-compose ]; then
+      echo "==> Testing podman-compose with an unavailable API socket"
+      [ ! -e "$unavailable_socket" ] || fail "socketless test endpoint already exists"
+      export DOCKER_HOST="unix://$unavailable_socket"
+    fi
   fi
 
   if [ "$engine" = podman ] && [ "$COMPOSE_PROVIDER" != podman-compose ] && [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock" ]; then
@@ -126,6 +133,9 @@ run_suite() {
   wait_for "stand-in metrics" 30 curl -sf "http://127.0.0.1:$STANDIN/metrics"
   wait_for "pinball metrics" 30 curl -sf "http://127.0.0.1:$PINBALL/metrics"
   "$BIN" status
+  if [ "$engine" = podman ] && [ "$COMPOSE_PROVIDER" = podman-compose ]; then
+    [ ! -e "$unavailable_socket" ] || fail "podman-compose unexpectedly created an API socket"
+  fi
 
   echo "==> Testing sandbox status & list"
   bin_has "none" sandbox list || fail "sandbox list missing none"
@@ -283,6 +293,11 @@ print(out)')"
   "$engine" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
   rm -rf "$TEST_HOME"; TEST_HOME=""
   export HOME="$ORIG_HOME"
+  if [ "$docker_host_set" = x ]; then
+    export DOCKER_HOST="$original_docker_host"
+  else
+    unset DOCKER_HOST
+  fi
   echo "==> engine $engine PASSED"
 }
 

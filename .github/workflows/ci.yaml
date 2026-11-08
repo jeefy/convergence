@@ -82,6 +82,42 @@ jobs:
           ENGINES: docker
         run: tests/test_e2e_local.sh
 
+  e2e-podman:
+    name: Live Container Smoke Test (Podman, ${{ matrix.compose-provider }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: unit-test
+    strategy:
+      fail-fast: false
+      matrix:
+        compose-provider: [docker-compose, podman-compose]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.24'
+          cache: true
+      - name: Install rootless Podman and Compose providers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y podman uidmap slirp4netns pipx
+          pipx install podman-compose==1.6.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/compose-bin" "$RUNNER_TEMP/podman-runtime"
+          chmod 700 "$RUNNER_TEMP/podman-runtime"
+          compose=$(docker info --format '{{range .ClientInfo.Plugins}}{{if eq .Name "compose"}}{{.Path}}{{end}}{{end}}')
+          test -x "$compose"
+          ln -s "$compose" "$RUNNER_TEMP/compose-bin/docker-compose"
+          echo "$RUNNER_TEMP/compose-bin" >> "$GITHUB_PATH"
+          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/podman-runtime" >> "$GITHUB_ENV"
+      - name: Build binary
+        run: make build
+      - name: Run local live container smoke test
+        env:
+          ENGINES: podman
+          COMPOSE_PROVIDER: ${{ matrix.compose-provider }}
+        run: tests/test_e2e_local.sh
+
   e2e-kind:
     name: Live Cluster Smoke Test (KinD)
     runs-on: ubuntu-latest

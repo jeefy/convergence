@@ -24,6 +24,29 @@ func TestLifecycleUsesSavedComposeProvider(t *testing.T) {
 	mustContain(t, e.envLog(t), "COMPOSE_PROVIDER="+filepath.Join(os.Getenv("PATH"), "podman-compose"))
 }
 
+func TestStart_when_savedComposeProviderRemoved(t *testing.T) {
+	for _, provider := range []string{"docker-compose", "podman-compose"} {
+		t.Run(provider, func(t *testing.T) {
+			e := newFakeEnv(t, "docker", "podman", "docker-compose", "podman-compose")
+			if err := runCLI(t, "init", "--yes", "--engine", "podman", "--provider", "direct", "--compose-provider", provider); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(filepath.Join(e.bin, provider)); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FAKE_FAIL", "up -d")
+			resetFlags(rootCmd)
+			err := runCLI(t, "start")
+			if err == nil || !strings.Contains(err.Error(), provider) || !strings.Contains(err.Error(), "not available on PATH") {
+				t.Fatalf("want missing provider error, got %v", err)
+			}
+			if calls := e.calls(t); calls != "" {
+				t.Fatalf("must not fall back or invoke the engine: %s", calls)
+			}
+		})
+	}
+}
+
 func TestStart_when_notInitialized(t *testing.T) {
 	newFakeEnv(t, "docker")
 	err := runCLI(t, "start")
