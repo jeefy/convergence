@@ -22,6 +22,7 @@ type Images struct {
 	StandIn          string
 	Pinball          string
 	CopilotAPI       string
+	Postgres         string
 	OpenShellGateway string
 }
 
@@ -30,7 +31,9 @@ var PinnedImages = Images{
 	StandIn:      "ghcr.io/jeefy/stand-in:0.6.0@sha256:39db3c7318d49b9e6d2f7bde7ec2c7828522437dddbc02b0a1bd9c07b391c2b2",
 	Pinball:      "ghcr.io/jeefy/pinball:0.7.4@sha256:0f70fd86a0b1fd1926909df11bfa6d9c388568d01a107c842677af3417be9b4d",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
-	CopilotAPI:       "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
+	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
+	// In-cluster request-log database (cluster install --request-log-postgres); uid 70 is the alpine postgres user.
+	Postgres:         "postgres:17-alpine",
 	OpenShellGateway: "ghcr.io/nvidia/openshell/gateway:latest",
 }
 

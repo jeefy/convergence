@@ -52,12 +52,22 @@ stringData:
       connectionTerminationDeadline: 600s
       logging:
         format: json
+{{- if .RequestLogEnabled }}
+        # URL comes from env (Secret pinball-optimizer-db), never from this file.
+        database:
+          url: "$REQUEST_LOG_DB_URL"
+{{- end }}
     frontendPolicies:
       accessLog:
         add:
           pinball.model: 'default(extauthz.model, null)'
           pinball.tier: 'default(extauthz.tier, null)'
           pinball.reason: 'default(extauthz.reason, null)'
+{{- if .RequestLogEnabled }}
+        # full stores prompts and completions (after Stand-In scrubbing); the optimizer replays them.
+        database:
+          llm: full
+{{- end }}
 {{- if .OTel.Enabled }}
       tracing:
         host: {{ .OTel.Endpoint }}
@@ -238,6 +248,14 @@ spec:
           image: {{ .Images.AgentGateway }}
           # args (not command): command would replace the image ENTRYPOINT.
           args: ["--file", "/etc/agentgateway/config.yaml"]
+{{- if .RequestLogEnabled }}
+          env:
+            - name: REQUEST_LOG_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pinball-optimizer-db
+                  key: dsn
+{{- end }}
           ports:
             - containerPort: 3000
               name: http
@@ -461,6 +479,103 @@ metadata:
 type: Opaque
 stringData:
   dsn: {{ printf "%q" .OptimizerDSN }}
+{{- if .RequestLogPostgres }}
+  password: {{ printf "%q" .RequestLogPGPassword }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: request-log-postgres
+  namespace: {{ .Namespace }}
+spec:
+  serviceName: request-log-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: request-log-postgres
+  template:
+    metadata:
+      labels:
+        app: request-log-postgres
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: {{ .Images.Postgres }}
+          env:
+            - name: POSTGRES_USER
+              value: convergence
+            - name: POSTGRES_DB
+              value: agentgateway
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pinball-optimizer-db
+                  key: password
+          ports:
+            - containerPort: 5432
+              name: pg
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "convergence", "-d", "agentgateway"]}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .RequestLogPGSize }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: request-log-postgres
+  namespace: {{ .Namespace }}
+spec:
+  selector:
+    app: request-log-postgres
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-optimizer-to-request-log-postgres
+  namespace: {{ .Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: request-log-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app: agentgateway}}
+        - podSelector: {matchLabels: {app: pinball-optimize}}
+      ports:
+        - {protocol: TCP, port: 5432}
+{{- end }}
 ---
 # NOTE: ReadWriteOnce limits pinball (readers) and the optimizer (writer) to
 # the same node, so pinball replicas effectively run on a single node. Use an
@@ -490,6 +605,9 @@ spec:
     spec:
       backoffLimit: 0
       template:
+        metadata:
+          labels:
+            app: pinball-optimize
         spec:
           restartPolicy: Never
           enableServiceLinks: false

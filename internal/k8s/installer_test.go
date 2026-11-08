@@ -443,3 +443,41 @@ func TestStandinPatternsConfigMap(t *testing.T) {
 		t.Error("unset must not render patterns")
 	}
 }
+
+func TestRequestLogPostgres(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", RequestLogPostgres: true, RequestLogPGPassword: "s3cret", OptSchedule: "0 3 * * *"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := renderDocs(t, &ClusterOptions{Namespace: "x", Provider: "direct", RequestLogPostgres: true})
+	if findKind(docs, "StatefulSet") == nil || findKind(docs, "CronJob") == nil {
+		t.Fatal("missing StatefulSet/CronJob")
+	}
+	for _, want := range []string{"name: request-log-postgres", "REQUEST_LOG_DB_URL", `url: "$REQUEST_LOG_DB_URL"`, "llm: full", "app: pinball-optimize", `schedule: "0 3 * * *"`, "request-log-postgres.x.svc.cluster.local"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	// The DSN must live in the Secret only, never in the gateway config.
+	cfg := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", RequestLogPostgres: true, RequestLogPGPassword: "s3cret"})
+	if strings.Contains(cfg, "s3cret") || strings.Contains(cfg, "postgres://") {
+		t.Error("DSN leaked into agentgateway config")
+	}
+}
+
+func TestRequestLogDBExternalAndExclusive(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", RequestLogDB: "postgres://h/db"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "llm: full") || strings.Contains(out, "kind: StatefulSet") || !strings.Contains(out, "kind: CronJob") {
+		t.Error("external DSN: expected log+CronJob, no StatefulSet")
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", RequestLogDB: "d", RequestLogPostgres: true}); err == nil {
+		t.Error("expected mutual-exclusion error")
+	}
+	out, _ = RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct"})
+	if strings.Contains(out, "llm: full") || strings.Contains(out, "REQUEST_LOG_DB_URL") {
+		t.Error("request log must be off by default")
+	}
+}
