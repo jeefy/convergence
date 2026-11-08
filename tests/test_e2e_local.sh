@@ -52,6 +52,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# bin_has <pattern> <convergence args...>: capture output first, then grep. `cmd | grep -q` SIGPIPEs
+# cmd once grep exits, which pipefail reports as a failure (podman's compose banner trips it).
+bin_has() {
+  local pat="$1" o; shift
+  o="$("$BIN" "$@" 2>&1)" || return 1
+  grep -qiF -- "$pat" <<<"$o"
+}
+
 free_port() { python3 -c 'import socket;s=socket.socket();s.bind(("",0));print(s.getsockname()[1])'; }
 
 metric() { # metric <port> <name> -> sum of all non-bucket series
@@ -111,9 +119,9 @@ run_suite() {
   "$BIN" status
 
   echo "==> Testing sandbox status & list"
-  "$BIN" sandbox list | grep -q "none" || fail "sandbox list missing none"
-  "$BIN" sandbox status | grep -q "none" || fail "sandbox status missing none"
-  "$BIN" sandbox status --json | grep -q '"type": "none"' || fail "sandbox status not none"
+  bin_has "none" sandbox list || fail "sandbox list missing none"
+  bin_has "none" sandbox status || fail "sandbox status missing none"
+  bin_has '"type": "none"' sandbox status --json || fail "sandbox status not none"
 
   echo "==> Pinball /check directly"
   local pr
@@ -181,22 +189,26 @@ print(out)')"
   "$BIN" stats --json | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["standin"]["credentials_restored"]>0 and d["pinball"]["decisions"]>0'
 
   echo "==> Read-only subcommands: version, models, logs, completion, doctor"
-  "$BIN" version | grep -q . || fail "version printed nothing"
-  "$BIN" models | grep -qi light || fail "models output lacks the light tier"
-  "$BIN" logs pinball 2>&1 | grep -q . || fail "logs pinball printed nothing"
-  "$BIN" logs agentgateway 2>&1 | grep -q . || fail "logs agentgateway printed nothing"
+  bin_has "v" version || fail "version printed nothing"
+  bin_has "light" models || fail "models output lacks the light tier"
+  # capture first: `cmd | grep -q` SIGPIPEs cmd once grep exits, which pipefail reports as failure
+  local lg
+  lg="$("$BIN" logs pinball 2>&1)" || fail "logs pinball failed"
+  [ -n "$lg" ] || fail "logs pinball printed nothing"
+  lg="$("$BIN" logs agentgateway 2>&1)" || fail "logs agentgateway failed"
+  [ -n "$lg" ] || fail "logs agentgateway printed nothing"
   "$BIN" logs bogus-service >/dev/null 2>&1 && fail "logs must reject unknown services"
-  "$BIN" completion bash | grep -q convergence || fail "completion bash printed nothing"
+  bin_has "convergence" completion bash || fail "completion bash printed nothing"
   "$BIN" doctor || fail "doctor failed on a healthy stack"
 
   echo "==> config <client>: dry-run, configure, idempotent, restore"
   local cc="$TEST_HOME/.claude/settings.json"
-  "$BIN" config claude-code --dry-run | grep -q 'dry-run' || fail "config dry-run output"
+  bin_has 'dry-run' config claude-code --dry-run || fail "config dry-run output"
   [ ! -e "$cc" ] || fail "config --dry-run wrote a file"
   "$BIN" config claude-code >/dev/null
   grep -q "127.0.0.1\|localhost" "$cc" || fail "claude-code settings not pointed at the gateway"
-  "$BIN" config claude-code | grep -q 'already up to date' || fail "config not idempotent"
-  "$BIN" config list | grep -q claude-code || fail "config list missing claude-code"
+  bin_has 'already up to date' config claude-code || fail "config not idempotent"
+  bin_has "claude-code" config list || fail "config list missing claude-code"
   "$BIN" config claude-code restore >/dev/null
   if [ -e "$cc" ]; then grep -q "localhost\|127.0.0.1" "$cc" && fail "restore left the Convergence keys"; fi
 
