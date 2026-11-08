@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit-test:
     name: Unit & Shell Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v7
@@ -24,18 +32,42 @@ jobs:
         run: make lint
       - name: Run unit tests with race detector
         run: go test -race -count=1 ./...
-      - name: Coverage summary
+      - name: Coverage gate (80% floor)
         run: |
           go test -coverprofile=coverage.out ./...
-          go tool cover -func=coverage.out | tail -1
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          echo "total coverage: ${total}%"
+          awk -v t="$total" 'BEGIN { exit (t+0 >= 80.0) ? 0 : 1 }' || { echo "::error::coverage ${total}% is below the 80% floor"; exit 1; }
+      - name: go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Shellcheck
+        run: shellcheck -S warning install.sh tests/*.sh
       - name: Test installer script
         run: bash -n install.sh && tests/test_install.sh
       - name: Build binary
         run: make build
+      - name: Validate rendered configs against the pinned agentgateway image
+        run: tests/test_validate_configs.sh
+
+  vulncheck:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: true
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   e2e-smoke:
     name: Live Container Smoke Test (Docker)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: unit-test
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +78,8 @@ jobs:
       - name: Build binary
         run: make build
       - name: Run local live container smoke test
+        env:
+          ENGINES: docker
         run: tests/test_e2e_local.sh
 
   e2e-kind:

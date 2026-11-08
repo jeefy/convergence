@@ -6,7 +6,7 @@ LDFLAGS = -X github.com/jeefy/convergence/internal/version.Version=$(VERSION) \
           -X github.com/jeefy/convergence/internal/version.Commit=$(COMMIT) \
           -X github.com/jeefy/convergence/internal/version.Date=$(DATE)
 
-.PHONY: all build test test-e2e test-e2e-copilot e2e-test test-e2e-cluster lint fmt clean
+.PHONY: all build test validate-configs test-e2e test-e2e-copilot e2e-test test-e2e-cluster lint fmt clean
 
 all: build
 
@@ -16,6 +16,9 @@ build:
 
 test:
 	go test -v ./...
+
+validate-configs: build
+	./tests/test_validate_configs.sh
 
 test-e2e: build
 	./tests/test_e2e_local.sh
