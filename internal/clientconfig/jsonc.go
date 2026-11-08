@@ -213,8 +213,12 @@ func (s *scanner) value() error {
 				s.i++
 				continue
 			}
+			start := s.i
 			if err := s.value(); err != nil {
 				return err
+			}
+			if s.i == start {
+				return fmt.Errorf("unexpected %q in array at offset %d", s.b[s.i], s.i)
 			}
 		}
 	case '"':
