@@ -152,7 +152,7 @@ func (e *ComposeEngine) RunningServices(ctx context.Context, dir string) ([]stri
 		cmd = exec.CommandContext(ctx, e.binary, "ps",
 			"--filter", "label=com.docker.compose.project.config_files="+composeFile,
 			"--filter", "status=running",
-			"--format", `{{.Label "com.docker.compose.service"}}`)
+			"--format", `{{index .Labels "com.docker.compose.service"}}`)
 		cmd.Dir = dir
 	}
 	var stderr bytes.Buffer

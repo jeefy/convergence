@@ -30,6 +30,7 @@ exit 0
 // fakeEnv is a sandboxed HOME plus a fake engine binary on PATH.
 type fakeEnv struct {
 	home string
+	bin  string
 	dir  string // ~/.convergence
 	log  string
 }
@@ -50,7 +51,7 @@ func newFakeEnv(t *testing.T, engines ...string) *fakeEnv {
 	t.Setenv("FAKE_LOG", logf)
 	t.Setenv("FAKE_FAIL", "")
 	t.Setenv("FAKE_RUNNING", "agentgateway")
-	return &fakeEnv{home: home, dir: filepath.Join(home, ".convergence"), log: logf}
+	return &fakeEnv{home: home, bin: bin, dir: filepath.Join(home, ".convergence"), log: logf}
 }
 
 func (e *fakeEnv) calls(t *testing.T) string {

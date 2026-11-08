@@ -332,6 +332,8 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 **Podman rootless errors.** Check that `podman info` works first. If using Docker Compose, enable Podman's user API socket (`systemctl --user enable --now podman.socket`). `podman-compose` does not require that socket; select it with `convergence init --engine podman --compose-provider podman-compose`. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
 
+**Podman label-template errors.** If `start` reports `can't evaluate field Label`, upgrade Convergence. Running-service checks now use Podman's `Labels` map, which also works on older distro releases.
+
 **Podman exits with status 125 during startup.** Running-service checks use native `podman ps`, compatible with either Compose provider. Check the stderr included in the error and try `podman ps` directly to diagnose storage or permission failures.
 
 **Health check failing.** Run `convergence status`, then `convergence logs <service>`. Common causes: an image pull failed (check network/registry access), `STANDIN_SALT missing` (re-run `convergence init`), or a bad provider key (gateway logs show 401s from upstream).
