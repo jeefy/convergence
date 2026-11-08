@@ -73,12 +73,15 @@ direct:
   claude-opus-5.5: "openai:stub"
 EOF
 
-  echo "==> Deploying Convergence via 'convergence cluster install'..."
+  echo "==> Deploying Convergence via 'convergence cluster install' (with in-cluster request-log postgres)..."
+  PG_PASS="testpgpass123"
   "$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
     --models-file="${MODELS_FILE}" \
-    --openai-base-url="http://stub-upstream.${STUB_NS}.svc.cluster.local:8080/v1"
+    --openai-base-url="http://stub-upstream.${STUB_NS}.svc.cluster.local:8080/v1" \
+    --request-log-postgres --request-log-postgres-password="${PG_PASS}"
 
-  echo "==> Waiting for Deployments..."
+  echo "==> Waiting for Deployments and StatefulSets..."
+  kubectl -n "${NAMESPACE}" rollout status "statefulset/request-log-postgres" --timeout=300s
   for d in stand-in pinball agentgateway; do
     kubectl -n "${NAMESPACE}" rollout status "deployment/${d}" --timeout=300s
   done
@@ -175,6 +178,29 @@ EOF
   D="$(sum_metric pinball 9201 pinball_decisions_total)"
   echo "pinball_decisions_total=${D}"
   [ "${D}" -gt 0 ]
+
+  echo "==> Verify request logging in Postgres and test 'convergence insights'..."
+  kubectl -n "${NAMESPACE}" port-forward svc/request-log-postgres 15432:5432 >/dev/null 2>&1 &
+  PF_PIDS+=($!)
+  for _ in $(seq 1 30); do
+    nc -z localhost 15432 2>/dev/null && break
+    sleep 1
+  done
+
+  PG_DSN="postgres://convergence:${PG_PASS}@localhost:15432/agentgateway?sslmode=disable"
+  insights_out=""
+  for _ in $(seq 1 20); do
+    insights_out="$("$BIN" insights --db-dsn="${PG_DSN}" --since=1d 2>/dev/null || true)"
+    if echo "${insights_out}" | grep -q "Requests: *[1-9]"; then break; fi
+    sleep 1
+  done
+  echo "${insights_out}"
+  echo "${insights_out}" | grep -q "Convergence Usage Insights" || { echo "ERROR: insights header missing" >&2; exit 1; }
+  echo "${insights_out}" | grep -qE "Requests: +[1-9]" || { echo "ERROR: insights requests is 0" >&2; exit 1; }
+
+  insights_json="$("$BIN" insights --db-dsn="${PG_DSN}" --since=1d --json)"
+  echo "${insights_json}" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_requests"] > 0'
+  echo "Insights query and JSON verification passed!"
 
   echo "==> Fail-closed: scale stand-in to 0; request must not reach upstream unscrubbed..."
   BEFORE="$(curl -sf http://localhost:${STUB_PORT}/_received | wc -l)"

@@ -188,6 +188,11 @@ print(out)')"
   echo "$out" | grep -qE 'Requests: +[1-9]' || fail "stats: gateway requests is zero"
   "$BIN" stats --json | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["standin"]["credentials_restored"]>0 and d["pinball"]["decisions"]>0'
 
+  echo "==> convergence insights without request log database warns with guidance"
+  local in_err
+  in_err="$("$BIN" insights 2>&1)" && fail "insights must exit non-zero when no request log db is configured"
+  echo "$in_err" | grep -q "requires agentgateway's Postgres request log" || fail "insights missing DB guidance: $in_err"
+
   echo "==> Read-only subcommands: version, models, logs, completion, doctor"
   bin_has "v" version || fail "version printed nothing"
   bin_has "light" models || fail "models output lacks the light tier"

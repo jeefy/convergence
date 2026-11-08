@@ -20,6 +20,11 @@ func FetchRequests(ctx context.Context, dsn string, since time.Duration) ([]Requ
 		_ = db.Close()
 	}()
 
+	return QueryRequests(ctx, db, since)
+}
+
+// QueryRequests executes the request_logs query against any database/sql DB.
+func QueryRequests(ctx context.Context, db *sql.DB, since time.Duration) ([]RequestRecord, error) {
 	cutoff := time.Now().Add(-since)
 
 	query := `
