@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Podman: detect running services with native `podman ps` and Compose labels instead of Docker-only `compose ps --services --filter` flags. Running-service check failures now include stderr.
 - copilot-api: fold `max_completion_tokens` into `max_tokens` (same preloaded shim). copilot-api fills in `max_tokens` when it is missing, so any request carrying `max_completion_tokens` (the current OpenAI parameter, sent by default by clients like OpenClaw) reached Copilot with both and failed with 400 `max_tokens and max_completion_tokens cannot both be set`.
 
 ## [0.1.4] - 2026-11-06

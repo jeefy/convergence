@@ -96,15 +96,26 @@ func TestStart_when_healthNeverReady(t *testing.T) {
 }
 
 func TestStart_when_healthy(t *testing.T) {
-	e := newFakeEnv(t, "docker")
-	port := healthyGateway(t)
-	e.saveCfg(t, func(c *config.Config) { c.GatewayPort = port })
-	if err := runCLI(t, "start"); err != nil {
-		t.Fatal(err)
-	}
-	mustContain(t, e.calls(t), "up -d")
-	if _, err := os.Stat(filepath.Join(e.dir, "docker-compose.yaml")); err != nil {
-		t.Errorf("assets not rendered: %v", err)
+	for _, name := range []string{"docker", "podman"} {
+		t.Run(name, func(t *testing.T) {
+			e := newFakeEnv(t, name)
+			port := healthyGateway(t)
+			e.saveCfg(t, func(c *config.Config) {
+				c.Engine = name
+				c.GatewayPort = port
+			})
+			if err := runCLI(t, "start"); err != nil {
+				t.Fatal(err)
+			}
+			mustContain(t, e.calls(t), "up -d")
+			if name == "podman" {
+				mustContain(t, e.calls(t), "ps --filter label=com.docker.compose.project.config_files="+
+					filepath.Join(e.dir, "docker-compose.yaml"))
+			}
+			if _, err := os.Stat(filepath.Join(e.dir, "docker-compose.yaml")); err != nil {
+				t.Errorf("assets not rendered: %v", err)
+			}
+		})
 	}
 }
 
