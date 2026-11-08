@@ -42,6 +42,9 @@ services:
   stand-in:
     image: {{ .Images.StandIn }}
     restart: unless-stopped
+    # Stand-In drains for 10s on SIGTERM, equal to compose's default stop timeout,
+    # so it was racing into SIGKILL; give it room to exit cleanly.
+    stop_grace_period: 20s
     environment:
       STANDIN_MODE: enforce
       STANDIN_SALT: ${STANDIN_SALT:?STANDIN_SALT missing from .env; run convergence init}

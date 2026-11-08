@@ -3,6 +3,7 @@ package templates
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -99,5 +100,12 @@ func TestRenderAssets_flagMatrixRenders(t *testing.T) {
 				t.Errorf("%s/%s: %v", p, sbx, err)
 			}
 		}
+	}
+}
+
+func TestComposeStandInStopGracePeriodExceedsDrain(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if !strings.Contains(files[ComposeFile], "stop_grace_period: 20s") {
+		t.Errorf("stand-in needs stop_grace_period above its 10s drain:\n%s", files[ComposeFile])
 	}
 }
