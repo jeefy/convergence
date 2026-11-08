@@ -3,6 +3,17 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: {{ .Namespace }}
+{{- if .StandinPatterns }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stand-in-patterns
+  namespace: {{ .Namespace }}
+data:
+  patterns.yaml: |
+{{ .StandinPatterns }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Secret
@@ -301,6 +312,10 @@ spec:
           env:
             - name: STANDIN_MODE
               value: "enforce"
+{{- if .StandinPatterns }}
+            - name: STANDIN_PATTERNS_FILE
+              value: /etc/stand-in/patterns.yaml
+{{- end }}
             - name: STANDIN_SALT
               valueFrom:
                 secretKeyRef:
@@ -326,6 +341,16 @@ spec:
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}
             seccompProfile: {type: RuntimeDefault}
+{{- if .StandinPatterns }}
+          volumeMounts:
+            - name: patterns
+              mountPath: /etc/stand-in
+              readOnly: true
+      volumes:
+        - name: patterns
+          configMap:
+            name: stand-in-patterns
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

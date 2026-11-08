@@ -22,6 +22,8 @@ type templateData struct {
 	UseOpenAI    bool
 	UseAnthropic bool
 	Images       templates.Images
+	// StandinPatterns is the patterns file indented for a ConfigMap block scalar ("" = unset).
+	StandinPatterns string
 }
 
 func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {

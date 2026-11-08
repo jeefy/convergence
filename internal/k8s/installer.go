@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -16,21 +17,22 @@ import (
 var k8sAssets embed.FS
 
 type ClusterOptions struct {
-	Namespace     string
-	Provider      string
-	CopilotToken  string
-	OpenAIKey     string
-	AnthropicKey  string
-	StandinSalt   string
-	OptimizerDSN  string // when set, renders the optimizer CronJob + overlay PVC
-	OptSchedule   string
-	FailOpen      bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
-	OTel          config.OTel // optional OTLP trace export
-	OpenAIBaseURL string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
-	ModelsFile    string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
-	IngressHost   string      // when set, renders an Ingress resource pointing to agentgateway:3000
-	EnablePDB     bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
-	DryRun        bool
+	Namespace           string
+	Provider            string
+	CopilotToken        string
+	OpenAIKey           string
+	AnthropicKey        string
+	StandinSalt         string
+	OptimizerDSN        string // when set, renders the optimizer CronJob + overlay PVC
+	OptSchedule         string
+	FailOpen            bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OTel                config.OTel // optional OTLP trace export
+	OpenAIBaseURL       string      // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	StandinPatternsFile string      // optional patterns.yaml; rendered into ConfigMap stand-in-patterns (replaces the image default)
+	ModelsFile          string      // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost         string      // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB           bool        // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	DryRun              bool
 
 	ImageAgentGateway string
 	ImageStandIn      string
@@ -93,6 +95,13 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 		return "", err
 	}
 	data := newTemplateData(opts, res)
+	if opts.StandinPatternsFile != "" {
+		raw, err := os.ReadFile(opts.StandinPatternsFile)
+		if err != nil {
+			return "", fmt.Errorf("reading stand-in patterns file: %w", err)
+		}
+		data.StandinPatterns = "    " + strings.ReplaceAll(strings.TrimRight(string(raw), "\n"), "\n", "\n    ")
+	}
 
 	tmpl, err := template.New("k8s").Parse(string(tmplData))
 	if err != nil {

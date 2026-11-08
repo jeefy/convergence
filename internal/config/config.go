@@ -88,6 +88,9 @@ type Config struct {
 	RequestLogDB string `yaml:"request_log_db,omitempty"`
 	// OTel enables OTLP trace export (off unless otel.endpoint is set).
 	OTel OTel `yaml:"otel,omitempty"`
+	// StandinPatternsFile is an absolute host path to a Stand-In patterns.yaml; compose mounts it
+	// read-only and sets STANDIN_PATTERNS_FILE. Empty = the image default.
+	StandinPatternsFile string `yaml:"standin_patterns_file,omitempty"`
 	// Ollama model overrides per tier ("" = internal/models default).
 	// ~/.convergence/models.yaml wins over these.
 	OllamaModelLight    string `yaml:"ollama_model_light,omitempty"`

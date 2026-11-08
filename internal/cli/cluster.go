@@ -30,6 +30,7 @@ var clusterInstallCmd = &cobra.Command{
 		otelEndpoint, _ := cmd.Flags().GetString("otel-endpoint")
 		otelProtocol, _ := cmd.Flags().GetString("otel-protocol")
 		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
+		patternsFile, _ := cmd.Flags().GetString("standin-patterns-file")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
 		ingressHost, _ := cmd.Flags().GetString("ingress-host")
@@ -41,24 +42,25 @@ var clusterInstallCmd = &cobra.Command{
 		imgCopilot, _ := cmd.Flags().GetString("image-copilot-api")
 
 		opts := &k8s.ClusterOptions{
-			Namespace:         ns,
-			Provider:          prov,
-			CopilotToken:      copilotTok,
-			OpenAIKey:         openaiKey,
-			AnthropicKey:      anthropicKey,
-			OptSchedule:       optSchedule,
-			OptimizerDSN:      optDSN,
-			FailOpen:          failOpen,
-			OTel:              config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
-			OpenAIBaseURL:     openaiBase,
-			ModelsFile:        modelsFile,
-			IngressHost:       ingressHost,
-			EnablePDB:         enablePDB,
-			DryRun:            dryRun,
-			ImageAgentGateway: imgAGW,
-			ImageStandIn:      imgStandIn,
-			ImagePinball:      imgPinball,
-			ImageCopilotAPI:   imgCopilot,
+			Namespace:           ns,
+			Provider:            prov,
+			CopilotToken:        copilotTok,
+			OpenAIKey:           openaiKey,
+			AnthropicKey:        anthropicKey,
+			OptSchedule:         optSchedule,
+			OptimizerDSN:        optDSN,
+			FailOpen:            failOpen,
+			OTel:                config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
+			StandinPatternsFile: patternsFile,
+			OpenAIBaseURL:       openaiBase,
+			ModelsFile:          modelsFile,
+			IngressHost:         ingressHost,
+			EnablePDB:           enablePDB,
+			DryRun:              dryRun,
+			ImageAgentGateway:   imgAGW,
+			ImageStandIn:        imgStandIn,
+			ImagePinball:        imgPinball,
+			ImageCopilotAPI:     imgCopilot,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -161,6 +163,7 @@ func init() {
 	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
+	clusterInstallCmd.Flags().String("standin-patterns-file", "", "Stand-In patterns.yaml (replaces the image default; rendered into ConfigMap stand-in-patterns)")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")
 	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")

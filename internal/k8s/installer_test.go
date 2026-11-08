@@ -420,3 +420,26 @@ func TestOTelTracing(t *testing.T) {
 		t.Errorf("sample > 1 must fail")
 	}
 }
+
+func TestStandinPatternsConfigMap(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "p.yaml")
+	if err := os.WriteFile(f, []byte("tier_a:\n  - pattern: 'x'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", StandinPatternsFile: f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"name: stand-in-patterns", "  patterns.yaml: |\n    tier_a:\n      - pattern: 'x'",
+		"name: STANDIN_PATTERNS_FILE\n              value: /etc/stand-in/patterns.yaml", "name: stand-in-patterns\n---",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	out, _ = RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if strings.Contains(out, "stand-in-patterns") {
+		t.Error("unset must not render patterns")
+	}
+}
