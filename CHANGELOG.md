@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `convergence insights`: analyze 1d, 7d, or 30d of prompt, completion, token usage, and Pinball tier allocation patterns from agentgateway's Postgres request log (`request_logs` and `request_log_payloads`). Identifies context bloat, heavy-tier over-utilization, and rapid retry loops. Optional `--coach` synthesizes actionable recommendations via the Convergence gateway (`POST /v1/chat/completions`). Supports `--json` for machine-readable output.
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed
