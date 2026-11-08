@@ -100,8 +100,10 @@ jobs:
           cache: true
       - name: Install rootless Podman and Compose providers
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y podman uidmap slirp4netns pipx
+          # These packages only need Ubuntu feeds, not preinstalled vendor feeds.
+          apt_opts=(-o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=-)
+          sudo apt-get "${apt_opts[@]}" update -qq
+          sudo apt-get "${apt_opts[@]}" install -y podman uidmap slirp4netns pipx
           pipx install podman-compose==1.6.0
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           mkdir -p "$RUNNER_TEMP/compose-bin"

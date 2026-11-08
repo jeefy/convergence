@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 )
 
@@ -227,7 +228,7 @@ func TestRunningServices(t *testing.T) {
 			if name == "podman" {
 				want = "ps --filter label=com.docker.compose.project.config_files=" +
 					filepath.Join(dir, "docker-compose.yaml") +
-					` --filter status=running --format {{.Label "com.docker.compose.service"}}`
+					` --filter status=running --format {{index .Labels "com.docker.compose.service"}}`
 			}
 			if got := strings.TrimSpace(logOf(t)); got != want {
 				t.Fatalf("command = %q, want %q", got, want)
@@ -250,6 +251,36 @@ func TestRunningServices(t *testing.T) {
 	bad := &ComposeEngine{binary: filepath.Join(t.TempDir(), "missing")}
 	if _, err := bad.RunningServices(t.Context(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "ps failed") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestPodmanServiceFormatWithoutLabelHelper(t *testing.T) {
+	fakeBins(t, "podman")
+	e, err := DetectEngine("podman")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.RunningServices(t.Context(), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	_, format, found := strings.Cut(strings.TrimSpace(logOf(t)), " --format ")
+	if !found {
+		t.Fatal("missing podman ps format")
+	}
+	tmpl, err := template.New("podman ps").Parse(format)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Older Podman exposes the Labels map without a Label helper method.
+	row := struct{ Labels map[string]string }{
+		Labels: map[string]string{"com.docker.compose.service": "pinball"},
+	}
+	var out strings.Builder
+	if err := tmpl.Execute(&out, row); err != nil {
+		t.Fatalf("format must work without a Label helper: %v", err)
+	}
+	if out.String() != "pinball" {
+		t.Fatalf("got service %q, want pinball", out.String())
 	}
 }
 

@@ -36,7 +36,7 @@ Anthropic Messages requests (`/v1/messages`) are translated by agentgateway, so 
 
 Podman lifecycle commands use `podman compose`, which delegates to an external provider. `compose_provider` in `config.yaml` may select `docker-compose` (requires the Podman API socket) or `podman-compose` (invokes Podman directly). Empty or `auto` keeps Podman's environment/config-based selection; explicit choices override `PODMAN_COMPOSE_PROVIDER`. Docker Engine always uses its Compose plugin. `doctor` probes the configured provider.
 
-Before starting the stack, Convergence checks for running services so it does not treat its own published ports as conflicts. Docker uses `compose ps`; Podman uses native `ps` filtered by the rendered Compose file's `com.docker.compose.project.config_files` label and running state, reading service names from `com.docker.compose.service`. Both `podman-compose` and Docker Compose set these labels. Failed checks include stderr.
+Before starting the stack, Convergence checks for running services so it does not treat its own published ports as conflicts. Docker uses `compose ps`; Podman uses native `ps` filtered by the rendered Compose file's `com.docker.compose.project.config_files` label and running state, reading service names from the `Labels` map's `com.docker.compose.service` entry. This works on older Podman releases without the `Label` template helper. Both `podman-compose` and Docker Compose set these labels. Failed checks include stderr.
 
 ### Ports
 

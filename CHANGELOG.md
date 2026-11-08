@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Podman: read Compose service names from the `Labels` map instead of the newer `Label` template helper, fixing running-service checks on older distro releases such as Ubuntu 24.04's Podman.
+
 ### Added
 
 - `init --compose-provider auto|docker-compose|podman-compose`: persist the Podman Compose provider in `config.yaml` for lifecycle commands and `doctor`. Empty or `auto` preserves Podman's default selection; explicit choices override `PODMAN_COMPOSE_PROVIDER` and require the provider on `PATH`. Docker Engine is unchanged.
