@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -111,9 +112,27 @@ func (e *ComposeEngine) Logs(ctx context.Context, dir string, follow bool, servi
 
 // RunningServices returns the names of running compose services.
 func (e *ComposeEngine) RunningServices(ctx context.Context, dir string) ([]string, error) {
-	out, err := e.composeCmd(ctx, dir, "ps", "--services", "--filter", "status=running").Output()
+	cmd := e.composeCmd(ctx, dir, "ps", "--services", "--filter", "status=running")
+	operation := "compose ps"
+	if e.Name() == "podman" {
+		operation = "ps"
+		composeFile, err := filepath.Abs(filepath.Join(dir, "docker-compose.yaml"))
+		if err != nil {
+			return nil, fmt.Errorf("resolving compose file: %w", err)
+		}
+		// Both Compose providers set these labels; podman-compose lacks the
+		// Docker Compose ps flags. Scope by file to honor project-name overrides.
+		cmd = exec.CommandContext(ctx, e.binary, "ps",
+			"--filter", "label=com.docker.compose.project.config_files="+composeFile,
+			"--filter", "status=running",
+			"--format", `{{.Label "com.docker.compose.service"}}`)
+		cmd.Dir = dir
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("%s compose ps failed: %w", e.Name(), err)
+		return nil, fmt.Errorf("%s %s failed: %w (stderr: %s)", e.Name(), operation, err, strings.TrimSpace(stderr.String()))
 	}
 	return strings.Fields(string(out)), nil
 }

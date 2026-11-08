@@ -306,6 +306,8 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 **Podman rootless permission errors.** Make sure the user socket is running (`systemctl --user enable --now podman.socket`) and that `podman-compose` or `podman compose` works on its own. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
 
+**Podman exits with status 125 during startup.** Running-service checks use native `podman ps`, compatible with either Compose provider. Check the stderr included in the error and try `podman ps` directly to diagnose storage or permission failures.
+
 **Health check failing.** Run `convergence status`, then `convergence logs <service>`. Common causes: an image pull failed (check network/registry access), `STANDIN_SALT missing` (re-run `convergence init`), or a bad provider key (gateway logs show 401s from upstream).
 
 **Copilot auth.** `401`/`403` from `copilot-api` means the token is missing, expired, or the account has no Copilot subscription. Run `convergence login copilot` again, then `convergence restart`. `convergence logs copilot-api` shows the auth result.
