@@ -283,6 +283,7 @@ What Stand-In does:
 What it does **not** do:
 
 - It won't catch every secret or any PII it has no rule for. Treat it as a safety net, not a guarantee.
+- **Custom Stand-In patterns:** `init --standin-patterns-file ./patterns.yaml` (stored as `standin_patterns_file`) or `cluster install --standin-patterns-file ./patterns.yaml`. Compose mounts the file read-only and sets `STANDIN_PATTERNS_FILE`; the cluster install renders ConfigMap `stand-in-patterns`, mounts it and sets the env. The file **replaces** Stand-In's packaged `patterns.yaml` (no merge; Stand-In loads exactly one file), so start from a copy of the upstream file and append your rules. Unset keeps the image default.
 - Stand-In is **fail-closed** by default: the gateway's ext_proc filter uses `failureMode: failClosed`, so if Stand-In is down, requests are rejected and nothing leaves unscrubbed. Opt into passthrough with `convergence init --fail-open` (local) or `convergence cluster install --fail-open` (cluster); then requests go upstream **unscrubbed** while Stand-In is down. `status` and `doctor` warn about it.
 - Pinball uses `failureMode: allow` on purpose: it only picks a model tier, so if it's down the request falls back to the standard-tier model. That doesn't affect confidentiality.
 - It doesn't protect the upstream response itself or anything you send through other paths.
@@ -305,6 +306,8 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 **Port already in use.** Another process has `3000` (or `4141`, `9102`, `9201`, `15020`). Find it with `ss -ltnp | grep 3000` (Linux) or `lsof -i :3000` (macOS). Re-run `convergence init --port 3100` for the gateway; the other ports are fixed.
 
 **Podman rootless permission errors.** Make sure the user socket is running (`systemctl --user enable --now podman.socket`) and that `podman-compose` or `podman compose` works on its own. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
+
+**Podman exits with status 125 during startup.** Running-service checks use native `podman ps`, compatible with either Compose provider. Check the stderr included in the error and try `podman ps` directly to diagnose storage or permission failures.
 
 **Health check failing.** Run `convergence status`, then `convergence logs <service>`. Common causes: an image pull failed (check network/registry access), `STANDIN_SALT missing` (re-run `convergence init`), or a bad provider key (gateway logs show 401s from upstream).
 

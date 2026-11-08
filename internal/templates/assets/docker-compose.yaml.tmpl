@@ -50,6 +50,11 @@ services:
       STANDIN_SALT: ${STANDIN_SALT:?STANDIN_SALT missing from .env; run convergence init}
       STANDIN_GRPC_PORT: "9101"
       STANDIN_METRICS_PORT: "9102"
+{{- if .Config.StandinPatternsFile }}
+      STANDIN_PATTERNS_FILE: /etc/stand-in/patterns.yaml
+    volumes:
+      - {{ .Config.StandinPatternsFile }}:/etc/stand-in/patterns.yaml:ro{{ .VolumeSuffix }}
+{{- end }}
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.StandinMetrics }}:9102"
     # Distroless image (no shell or python3); `convergence status` probes :9102 over loopback HTTP.

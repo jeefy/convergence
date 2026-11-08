@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,6 +32,7 @@ type initFlags struct {
 	failOpen     bool
 	requestLogDB string
 	otel         config.OTel
+	patternsFile string
 	ollamaLight  string
 	ollamaStd    string
 	ollamaHeavy  string
@@ -170,6 +172,16 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 	}
 	if err := cfg.OTel.Validate(); err != nil {
 		return err
+	}
+	if f.patternsFile != "" {
+		abs, err := filepath.Abs(f.patternsFile)
+		if err != nil {
+			return err
+		}
+		if st, err := os.Stat(abs); err != nil || st.IsDir() {
+			return fmt.Errorf("--standin-patterns-file %s: not a readable file", f.patternsFile)
+		}
+		cfg.StandinPatternsFile = abs
 	}
 	if f.ollamaLight != "" {
 		cfg.OllamaModelLight = f.ollamaLight
@@ -321,6 +333,7 @@ func init() {
 	f.StringVar(&initOpts.otel.Endpoint, "otel-endpoint", "", "Export OTLP traces to this collector host:port (default: off)")
 	f.StringVar(&initOpts.otel.Protocol, "otel-protocol", "", "OTLP protocol: grpc (default) or http")
 	f.Float64Var(&initOpts.otel.Sample, "otel-sample", 0, "Trace sampling rate 0..1 (default 1)")
+	f.StringVar(&initOpts.patternsFile, "standin-patterns-file", "", "Stand-In patterns.yaml to mount instead of the image default (replaces it, no merge)")
 	f.StringVar(&initOpts.ollamaLight, "ollama-model-light", "", "Ollama model for the light tier (default from 'convergence models')")
 	f.StringVar(&initOpts.ollamaStd, "ollama-model-standard", "", "Ollama model for the standard tier")
 	f.StringVar(&initOpts.ollamaHeavy, "ollama-model-heavy", "", "Ollama model for the heavy tier")

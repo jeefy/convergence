@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `init --standin-patterns-file` and `cluster install --standin-patterns-file`: use a custom Stand-In `patterns.yaml` (compose bind mount / ConfigMap `stand-in-patterns`, plus `STANDIN_PATTERNS_FILE`). Replaces the image default; unset is unchanged.
 - `models.yaml`: optional `passthrough:` block (`name: {provider: copilot|openai|anthropic|ollama, model: id}`) exposes fixed model names that bypass Pinball (public `llm.models` entries; local and cluster). Names colliding with `auto`/`pinball`/`light`/`standard`/`heavy`/`pinball-*`, unknown providers and empty models are errors. Stand-In still scrubs every request.
 - `cluster install --request-log-postgres` (in-cluster Postgres with generated password) or `--request-log-db <dsn>`: agentgateway writes its request log to Postgres with LLM logging `full` (stores prompts and completions after Stand-In scrubbing) and the optimizer CronJob reads the same Secret `pinball-optimizer-db` via `PINBALL_OPT_DB_DSN`. Off by default; the DSN is never rendered into a ConfigMap. New `--request-log-postgres-password`.
 - agentgateway now returns Pinball's pick on every `auto`/`pinball` response as headers `x-pinball-model`, `x-pinball-tier` and `x-pinball-reason` (a `transformations.response` policy reading ext_authz metadata; local and cluster). The body's `model` still names the real upstream model, so clients that compare it to the requested `auto` can read the header instead of reporting a route change.
@@ -13,6 +14,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Podman: detect running services with native `podman ps` and Compose labels instead of Docker-only `compose ps --services --filter` flags. Running-service check failures now include stderr.
 - copilot-api: fold `max_completion_tokens` into `max_tokens` (same preloaded shim). copilot-api fills in `max_tokens` when it is missing, so any request carrying `max_completion_tokens` (the current OpenAI parameter, sent by default by clients like OpenClaw) reached Copilot with both and failed with 400 `max_tokens and max_completion_tokens cannot both be set`.
 
 ## [0.1.4] - 2026-11-06
