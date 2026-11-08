@@ -2,21 +2,22 @@ package insights
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	_ "github.com/lib/pq"
 )
 
 // FetchRequests connects to the postgres request-log database and reads logs completed since `since`.
 func FetchRequests(ctx context.Context, dsn string, since time.Duration) ([]RequestRecord, error) {
-	conn, err := pgx.Connect(ctx, dsn)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to request log database: %w", err)
 	}
 	defer func() {
-		_ = conn.Close(ctx)
+		_ = db.Close()
 	}()
 
 	cutoff := time.Now().Add(-since)
@@ -45,11 +46,13 @@ WHERE l.completed_at >= $1
 ORDER BY l.completed_at ASC
 `
 
-	rows, err := conn.Query(ctx, query, cutoff)
+	rows, err := db.QueryContext(ctx, query, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("querying request_logs: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var records []RequestRecord
 	for rows.Next() {
