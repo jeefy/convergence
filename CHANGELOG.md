@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-08
+
 ### Added
 
 - `convergence insights`: analyze 1d, 7d, or 30d of prompt, completion, token usage, and Pinball tier allocation patterns from agentgateway's Postgres request log (`request_logs` and `request_log_payloads`). Identifies context bloat, heavy-tier over-utilization, and rapid retry loops. Optional `--coach` synthesizes actionable recommendations via the Convergence gateway (`POST /v1/chat/completions`). Supports `--json` for machine-readable output.
@@ -117,7 +119,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/jeefy/convergence/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jeefy/convergence/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jeefy/convergence/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/jeefy/convergence/compare/v0.1.3...v0.1.4
