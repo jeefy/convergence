@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-08
+
 ### Fixed
 
 - Compose: keep the OpenShell gateway under `services` and declare optional named volumes in one mapping, fixing startup with the Copilot provider and OpenShell sandbox enabled together.
@@ -111,7 +113,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jeefy/convergence/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jeefy/convergence/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/jeefy/convergence/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/jeefy/convergence/compare/v0.1.2...v0.1.3
