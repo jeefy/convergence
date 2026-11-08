@@ -253,7 +253,13 @@ print(out)')"
   "$BIN" stats >/dev/null 2>&1 && fail "stats should exit non-zero when every source is down"
 
   echo "==> down, then uninstall --purge --yes"
-  "$BIN" down
+  if ! "$BIN" down; then
+    [ "$engine" = podman ] || fail "down failed"
+    echo "WARN: podman down failed, retrying"
+    sleep 2
+    "$BIN" down || "$engine" ps -a --format '{{.Names}}' \
+      | grep -E "^${COMPOSE_PROJECT_NAME}-" | xargs -r "$engine" rm -f >/dev/null 2>&1 || true
+  fi
   [ -z "$("$engine" ps -a --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}-(agentgateway|stand-in|pinball)" || true)" ] || fail "stack containers remain after down"
   "$BIN" uninstall --purge --yes
   [ ! -e "$cfgdir" ] || fail "uninstall --purge left $cfgdir"
