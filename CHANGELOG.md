@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Compose: keep the OpenShell gateway under `services` and declare optional named volumes in one mapping, fixing startup with the Copilot provider and OpenShell sandbox enabled together.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added

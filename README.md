@@ -89,6 +89,8 @@ convergence start
 convergence sandbox run opencode
 ```
 
+For the bundled OpenShell gateway, use `--sandbox openshell` with any provider, including Copilot.
+
 ### Kubernetes
 
 ```bash

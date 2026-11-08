@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 func TestResolveImages_nilConfigReturnsPinned(t *testing.T) {
@@ -89,16 +90,52 @@ func TestRenderAssets_flagMatrixRenders(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, p := range []config.ProviderType{config.ProviderCopilot, config.ProviderDirect, config.ProviderOllama} {
 		for _, sbx := range []config.SandboxType{config.SandboxNone, config.SandboxOpenShell} {
-			cfg := config.DefaultConfig()
-			cfg.Provider, cfg.Sandbox = p, sbx
-			cfg.FailOpen = true
-			cfg.BindAddress = "0.0.0.0"
-			cfg.RequestLogDB = "postgres://u:p@h/db"
-			cfg.OTel = config.OTel{Endpoint: "otel:4317", Protocol: "http", Sample: 0.5}
-			cfg.CopilotToken = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
-			if err := RenderAssets(cfg, t.TempDir()); err != nil {
-				t.Errorf("%s/%s: %v", p, sbx, err)
-			}
+			t.Run(string(p)+"/"+string(sbx), func(t *testing.T) {
+				cfg := config.DefaultConfig()
+				cfg.Provider, cfg.Sandbox = p, sbx
+				cfg.FailOpen = true
+				cfg.BindAddress = "0.0.0.0"
+				cfg.RequestLogDB = "postgres://u:p@h/db"
+				cfg.OTel = config.OTel{Endpoint: "otel:4317", Protocol: "http", Sample: 0.5}
+				cfg.CopilotToken = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+				dir := t.TempDir()
+				if err := RenderAssets(cfg, dir); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(filepath.Join(dir, ComposeFile))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var compose struct {
+					Services map[string]any `yaml:"services"`
+					Volumes  map[string]any `yaml:"volumes"`
+				}
+				if err := yaml.Unmarshal(data, &compose); err != nil {
+					t.Fatalf("invalid Compose YAML: %v", err)
+				}
+				wantVolumes := 0
+				for _, optional := range []struct {
+					service string
+					volume  string
+					enabled bool
+				}{
+					{"copilot-api", "copilot-data", p == config.ProviderCopilot},
+					{"openshell", "openshell-data", sbx == config.SandboxOpenShell},
+				} {
+					if _, present := compose.Services[optional.service]; present != optional.enabled {
+						t.Errorf("service %s present=%v, want %v", optional.service, present, optional.enabled)
+					}
+					if _, present := compose.Volumes[optional.volume]; present != optional.enabled {
+						t.Errorf("volume %s present=%v, want %v", optional.volume, present, optional.enabled)
+					}
+					if optional.enabled {
+						wantVolumes++
+					}
+				}
+				if len(compose.Volumes) != wantVolumes {
+					t.Errorf("got %d named volumes, want %d", len(compose.Volumes), wantVolumes)
+				}
+			})
 		}
 	}
 }
