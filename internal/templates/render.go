@@ -30,7 +30,7 @@ type Images struct {
 var PinnedImages = Images{
 	AgentGateway: "cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2",
 	StandIn:      "ghcr.io/jeefy/stand-in:0.6.1@sha256:baa7bd9bb4de581114ba9e58ecc36355703a742b2170e73d8324d61f09134a3e",
-	Pinball:      "ghcr.io/jeefy/pinball:0.7.4@sha256:0f70fd86a0b1fd1926909df11bfa6d9c388568d01a107c842677af3417be9b4d",
+	Pinball:      "ghcr.io/jeefy/pinball:0.7.5@sha256:3e70723ef85ba4f6d80d2f2ece790263f6e7819880c7b4e59ed35b3cbb8b7b17",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
 	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
 	// In-cluster request-log database (cluster install --request-log-postgres); uid 70 is the alpine postgres user.

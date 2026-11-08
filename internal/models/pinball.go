@@ -9,7 +9,7 @@ import (
 )
 
 // Pinball is the optional `pinball:` block of models.yaml: overrides for
-// pinball's thresholds and scoring (pinball 0.7.4 schema). Unset keys keep
+// pinball's thresholds and scoring (pinball 0.7.5 schema). Unset keys keep
 // pinball's own defaults.
 type Pinball struct {
 	Thresholds struct {
