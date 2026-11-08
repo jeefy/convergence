@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BIN="${ROOT_DIR}/bin/convergence"
-GW=3000; STANDIN=9102; PINBALL=9201; STATS=15020
+GW=3000; STANDIN=9102; PINBALL=9201
 
 [ -x "$BIN" ] || { echo "Building convergence binary..."; (cd "$ROOT_DIR" && make build); }
 
@@ -51,7 +51,6 @@ echo "==> Running convergence status"
 
 echo "==> Baseline metrics"
 base_matches="$(metric $STANDIN standin_matches_total)"
-base_restored="$(metric $STANDIN standin_restored_total)"
 base_dec="$(metric $PINBALL pinball_decisions_total)"
 
 echo "==> Sending test prompt through gateway (testing Pinball tier routing + Stand-In scrubbing)"

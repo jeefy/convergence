@@ -19,6 +19,8 @@ export XDG_DATA_HOME="${XDG_DATA_HOME:-$ORIG_HOME/.local/share}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$ORIG_HOME/.config}"
 TEST_HOME=""
 STUB_NAME="convergence-e2e-stub-$$"
+# own compose project, so down/uninstall here can never touch a real "convergence" stack
+export COMPOSE_PROJECT_NAME="cvg-e2e-$$"
 CUR_ENGINE=""
 PODMAN_SVC_PID=""
 
@@ -29,7 +31,7 @@ dump_diagnostics() { # best-effort container state and logs, so CI failures are 
   echo "==> DIAGNOSTICS ($CUR_ENGINE)" >&2
   "$CUR_ENGINE" ps -a --format '{{.Names}}\t{{.Status}}' 2>&1 | head -20 >&2 || true
   local c
-  for c in $("$CUR_ENGINE" ps -a --format '{{.Names}}' 2>/dev/null | grep '^convergence-' || true); do
+  for c in $("$CUR_ENGINE" ps -a --format '{{.Names}}' 2>/dev/null | grep -E "^(convergence|${COMPOSE_PROJECT_NAME})-" || true); do
     echo "--- $c health:" >&2
     "$CUR_ENGINE" inspect --format '{{json .State.Health}}' "$c" 2>&1 | cut -c1-1500 >&2 || true
     echo "--- $c logs (tail):" >&2
@@ -125,7 +127,9 @@ run_suite() {
   base_restored="$(metric $STANDIN standin_restored_total)"
   base_dec="$(metric $PINBALL pinball_decisions_total)"
 
-  local token="ghp_$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 36)"
+  local token
+  # python, not tr|head: head closing the pipe SIGPIPEs tr, which pipefail turns into a failure
+  token="ghp_$(python3 -c 'import secrets,string; print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
   local body="{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"please store my token $token now\"}]}"
 
   echo "==> Non-streaming round trip"
@@ -176,9 +180,71 @@ print(out)')"
   echo "$out" | grep -qE 'Requests: +[1-9]' || fail "stats: gateway requests is zero"
   "$BIN" stats --json | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["standin"]["credentials_restored"]>0 and d["pinball"]["decisions"]>0'
 
+  echo "==> Read-only subcommands: version, models, logs, completion, doctor"
+  "$BIN" version | grep -q . || fail "version printed nothing"
+  "$BIN" models | grep -qi light || fail "models output lacks the light tier"
+  "$BIN" logs pinball 2>&1 | grep -q . || fail "logs pinball printed nothing"
+  "$BIN" logs agentgateway 2>&1 | grep -q . || fail "logs agentgateway printed nothing"
+  "$BIN" logs bogus-service >/dev/null 2>&1 && fail "logs must reject unknown services"
+  "$BIN" completion bash | grep -q convergence || fail "completion bash printed nothing"
+  "$BIN" doctor || fail "doctor failed on a healthy stack"
+
+  echo "==> config <client>: dry-run, configure, idempotent, restore"
+  local cc="$TEST_HOME/.claude/settings.json"
+  "$BIN" config claude-code --dry-run | grep -q 'dry-run' || fail "config dry-run output"
+  [ ! -e "$cc" ] || fail "config --dry-run wrote a file"
+  "$BIN" config claude-code >/dev/null
+  grep -q "127.0.0.1\|localhost" "$cc" || fail "claude-code settings not pointed at the gateway"
+  "$BIN" config claude-code | grep -q 'already up to date' || fail "config not idempotent"
+  "$BIN" config list | grep -q claude-code || fail "config list missing claude-code"
+  "$BIN" config claude-code restore >/dev/null
+  if [ -e "$cc" ]; then grep -q "localhost\|127.0.0.1" "$cc" && fail "restore left the Convergence keys"; fi
+
+  echo "==> restart keeps the stack serving"
+  "$BIN" restart
+  wait_for "gateway after restart" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
+  wait_for "stand-in after restart" 30 curl -sf "http://127.0.0.1:$STANDIN/metrics"
+
+  echo "==> upgrade (re-render, pull pinned images, recreate)"
+  "$BIN" upgrade
+  wait_for "gateway after upgrade" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
+  "$BIN" status
+
+  echo "==> fail-closed default: requests are rejected while Stand-In is down"
+  local standin_c
+  standin_c="$("$engine" ps --format '{{.Names}}' | grep "^${COMPOSE_PROJECT_NAME}-stand-in" | head -1)"
+  [ -n "$standin_c" ] || fail "stand-in container not found"
+  "$engine" stop "$standin_c" >/dev/null
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' -m 30 "http://127.0.0.1:$GW/v1/chat/completions" \
+    -H 'Content-Type: application/json' -d "$body")"
+  case "$code" in 2*) fail "fail-closed: request succeeded ($code) with Stand-In down";; esac
+  echo "    rejected with HTTP $code"
+
+  echo "==> --fail-open + OTel flags re-render and the stack serves again"
+  "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" \
+    --fail-open --otel-endpoint 127.0.0.1:4317 --otel-sample 0.5 >/dev/null
+  if grep -q '^engine:' "$cfgdir/config.yaml"; then sed -i "s/^engine:.*/engine: $engine/" "$cfgdir/config.yaml"; fi
+  chmod 755 "$cfgdir"; chmod 644 "$cfgdir"/*.yaml
+  grep -q 'failureMode: failOpen' "$cfgdir/agentgateway.yaml" || fail "failOpen not rendered"
+  grep -q 'tracing:' "$cfgdir/agentgateway.yaml" || fail "otel tracing not rendered"
+  "$BIN" restart
+  wait_for "gateway after fail-open restart" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
+  standin_c="$("$engine" ps --format '{{.Names}}' | grep "^${COMPOSE_PROJECT_NAME}-stand-in" | head -1)"
+  "$engine" stop "$standin_c" >/dev/null
+  code="$(curl -s -o /dev/null -w '%{http_code}' -m 30 "http://127.0.0.1:$GW/v1/chat/completions" \
+    -H 'Content-Type: application/json' -d "$body")"
+  case "$code" in 2*) ;; *) fail "fail-open: request not served ($code) with Stand-In down";; esac
+
   echo "==> Stopping stack"
   "$BIN" stop
   "$BIN" stats >/dev/null 2>&1 && fail "stats should exit non-zero when every source is down"
+
+  echo "==> down, then uninstall --purge --yes"
+  "$BIN" down
+  [ -z "$("$engine" ps -a --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}-(agentgateway|stand-in|pinball)" || true)" ] || fail "stack containers remain after down"
+  "$BIN" uninstall --purge --yes
+  [ ! -e "$cfgdir" ] || fail "uninstall --purge left $cfgdir"
   "$engine" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
   rm -rf "$TEST_HOME"; TEST_HOME=""
   export HOME="$ORIG_HOME"
