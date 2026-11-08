@@ -22,6 +22,8 @@ type templateData struct {
 	UseOpenAI    bool
 	UseAnthropic bool
 	Images       templates.Images
+	Endpoints    []models.Passthrough
+	KeyEnvs      []string
 	// StandinPatterns is the patterns file indented for a ConfigMap block scalar ("" = unset).
 	StandinPatterns string
 }
@@ -48,6 +50,8 @@ func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {
 		UseOpenAI:      res.UsesFamily(models.UpstreamOpenAI),
 		UseAnthropic:   res.UsesFamily(models.UpstreamAnthropic),
 		Images:         imgs,
+		Endpoints:      res.Endpoints(),
+		KeyEnvs:        res.KeyEnvs(),
 	}
 	for _, m := range res.Models {
 		ref := "copilot-completions"
@@ -60,7 +64,7 @@ func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {
 		d.Entries = append(d.Entries, entry{m.PinballName, ref, m.UpstreamModel, m.PromptTokens})
 	}
 	for _, p := range res.Passthrough {
-		d.Passthrough = append(d.Passthrough, entry{Name: p.Name, Ref: refFor(p.Provider), Upstream: p.Model})
+		d.Passthrough = append(d.Passthrough, entry{Name: p.Name, Ref: p.Ref(refFor(p.Provider)), Upstream: p.Model})
 	}
 	return d
 }

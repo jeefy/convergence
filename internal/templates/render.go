@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -156,7 +157,8 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 			return err
 		}
 	}
-	return writeFile(filepath.Join(targetDir, EnvFile), RenderEnv(cfg), 0o600)
+	envPath := filepath.Join(targetDir, EnvFile)
+	return writeFile(envPath, append(RenderEnv(cfg), passthroughEnv(res.KeyEnvs(), envPath)...), 0o600)
 }
 
 // RenderEnv returns the compose .env content carrying every secret.
@@ -179,6 +181,29 @@ func RenderEnv(cfg *config.Config) []byte {
 	for _, kv := range env {
 		// Single quotes: compose takes the value literally (no $ expansion).
 		fmt.Fprintf(&b, "%s='%s'\n", kv[0], kv[1])
+	}
+	return b.Bytes()
+}
+
+// passthroughEnv renders .env lines for passthrough api_key_env names: value from
+// the current environment, else kept from the existing .env (so restart/upgrade
+// do not blank a key), else empty.
+func passthroughEnv(names []string, envPath string) []byte {
+	old := map[string]string{}
+	if b, err := os.ReadFile(envPath); err == nil {
+		for _, l := range strings.Split(string(b), "\n") {
+			if k, v, ok := strings.Cut(l, "="); ok {
+				old[k] = strings.TrimSuffix(strings.TrimPrefix(v, "'"), "'")
+			}
+		}
+	}
+	var b bytes.Buffer
+	for _, n := range names {
+		v := os.Getenv(n)
+		if v == "" {
+			v = old[n]
+		}
+		fmt.Fprintf(&b, "%s='%s'\n", n, v)
 	}
 	return b.Bytes()
 }

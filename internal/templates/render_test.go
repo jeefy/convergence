@@ -396,3 +396,38 @@ func TestStandinPatternsFile(t *testing.T) {
 		t.Error("unset must not render patterns")
 	}
 }
+
+func TestPassthroughEndpointRendered(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	y := "passthrough:\n  glm-5.2: {provider: ollama, model: glm-5.2, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}\n  glm-5.1: {provider: ollama, model: glm-5.1, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}\n  gemma4: {provider: ollama, model: gemma4}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OLLAMA_CLOUD_KEY", "secret-value")
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	read := func(f string) string { b, _ := os.ReadFile(filepath.Join(dir, f)); return string(b) }
+	ag, comp, env := read("agentgateway.yaml"), read("docker-compose.yaml"), read(".env")
+	for _, want := range []string{
+		"- name: ollama-ep1\n      provider: ollama\n      params:\n        baseUrl: https://ollama.com\n        apiKey: \"${OLLAMA_CLOUD_KEY}\"",
+		"- name: glm-5.2\n      provider: {reference: ollama-ep1}",
+		"- name: glm-5.1\n      provider: {reference: ollama-ep1}",
+		"- name: gemma4\n      provider: {reference: ollama-local}",
+	} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("agentgateway.yaml missing %q", want)
+		}
+	}
+	if strings.Count(ag, "- name: ollama-ep") != 1 {
+		t.Error("same endpoint must render one provider")
+	}
+	if strings.Contains(ag, "secret-value") || strings.Contains(comp, "secret-value") {
+		t.Error("key leaked into a public file")
+	}
+	if !strings.Contains(comp, "OLLAMA_CLOUD_KEY: ${OLLAMA_CLOUD_KEY:-}") || !strings.Contains(env, "OLLAMA_CLOUD_KEY='secret-value'") {
+		t.Error("env plumbing missing")
+	}
+}

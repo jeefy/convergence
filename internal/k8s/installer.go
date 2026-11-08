@@ -38,6 +38,7 @@ type ClusterOptions struct {
 	ModelsFile           string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
 	IngressHost          string // when set, renders an Ingress resource pointing to agentgateway:3000
 	EnablePDB            bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	PassthroughSecret    string // existing Secret whose keys are the passthrough api_key_env names
 	DryRun               bool
 
 	ImageAgentGateway string
@@ -65,6 +66,9 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 
 	if opts.StandinSalt == "" {
 		opts.StandinSalt, _ = config.GenerateSalt()
+	}
+	if opts.PassthroughSecret == "" {
+		opts.PassthroughSecret = "convergence-passthrough"
 	}
 	if opts.RequestLogDB != "" && opts.RequestLogPostgres {
 		return "", fmt.Errorf("--request-log-db and --request-log-postgres are mutually exclusive")
@@ -111,7 +115,7 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	}
 	res.Passthrough = passthrough
 	for _, p := range passthrough {
-		if p.Provider == models.UpstreamOllama || (p.Provider == models.UpstreamCopilot && opts.Provider != "copilot") {
+		if (p.Provider == models.UpstreamOllama && p.BaseURL == "") || (p.Provider == models.UpstreamCopilot && opts.Provider != "copilot") {
 			return "", fmt.Errorf("models.yaml: passthrough.%s: provider %s is not available on this cluster install", p.Name, p.Provider)
 		}
 	}

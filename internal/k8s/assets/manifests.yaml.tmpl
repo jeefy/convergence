@@ -155,6 +155,17 @@ stringData:
           params:
             apiKey: "{{ .AnthropicKey }}"
 {{- end }}
+{{- range .Endpoints }}
+        - name: {{ .Endpoint }}
+          provider: {{ if eq .Provider "openai" }}openAI{{ else }}{{ .Provider }}{{ end }}
+          params:
+{{- if .BaseURL }}
+            baseUrl: {{ .BaseURL }}
+{{- end }}
+{{- if .KeyEnv }}
+            apiKey: "${{ "{" }}{{ .KeyEnv }}{{ "}" }}"
+{{- end }}
+{{- end }}
       virtualModels:
         - name: auto
           routing: &pinball_routing
@@ -248,13 +259,25 @@ spec:
           image: {{ .Images.AgentGateway }}
           # args (not command): command would replace the image ENTRYPOINT.
           args: ["--file", "/etc/agentgateway/config.yaml"]
-{{- if .RequestLogEnabled }}
+{{- if or .KeyEnvs .RequestLogEnabled }}
           env:
+{{- if .RequestLogEnabled }}
             - name: REQUEST_LOG_DB_URL
               valueFrom:
                 secretKeyRef:
                   name: pinball-optimizer-db
                   key: dsn
+{{- end }}
+{{- if .KeyEnvs }}
+          # passthrough api_key_env values come from a Secret you create; never rendered here.
+{{- range .KeyEnvs }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.PassthroughSecret }}
+                  key: {{ . }}
+{{- end }}
+{{- end }}
 {{- end }}
           ports:
             - containerPort: 3000

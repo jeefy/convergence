@@ -266,6 +266,12 @@ func validateOverrides(o Overrides) error {
 	return nil
 }
 
+// Endpoints lists the custom passthrough endpoints (one provider block each).
+func (r *Resolved) Endpoints() []Passthrough { return Endpoints(r.Passthrough) }
+
+// KeyEnvs lists the env var names passthrough endpoints read their API keys from.
+func (r *Resolved) KeyEnvs() []string { return KeyEnvs(r.Passthrough) }
+
 // UsesFamily reports whether any model is served by the given upstream family.
 func (r *Resolved) UsesFamily(family string) bool {
 	for _, m := range r.Models {
@@ -274,7 +280,7 @@ func (r *Resolved) UsesFamily(family string) bool {
 		}
 	}
 	for _, p := range r.Passthrough {
-		if p.Provider == family {
+		if p.Provider == family && p.Endpoint == "" {
 			return true
 		}
 	}

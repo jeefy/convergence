@@ -120,6 +120,18 @@ llm:
         apiKey: "$ANTHROPIC_API_KEY"
 {{- end }}
 
+{{- range .Models.Endpoints }}
+    - name: {{ .Endpoint }}
+      provider: {{ if eq .Provider "openai" }}openAI{{ else }}{{ .Provider }}{{ end }}
+      params:
+{{- if .BaseURL }}
+        baseUrl: {{ .BaseURL }}
+{{- end }}
+{{- if .KeyEnv }}
+        apiKey: "${{ "{" }}{{ .KeyEnv }}{{ "}" }}"
+{{- end }}
+{{- end }}
+
   # Generated from internal/models (override: ~/.convergence/models.yaml).
   virtualModels:
     - name: auto
@@ -157,6 +169,6 @@ llm:
 {{ end }}
 {{- range .Models.Passthrough }}
     - name: {{ .Name }}
-      provider: {reference: {{ providerRef .Provider }}}
+      provider: {reference: {{ if .Endpoint }}{{ .Endpoint }}{{ else }}{{ providerRef .Provider }}{{ end }}}
       params: {model: {{ .Model }}}
 {{- end }}

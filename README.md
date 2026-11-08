@@ -150,7 +150,17 @@ passthrough:
   glm-5.2:         {provider: ollama,  model: glm-5.2}
 ```
 
-`provider` is `copilot`, `openai`, `anthropic` or `ollama`. Names must not be `auto`, `pinball`, `light`, `standard`, `heavy` or start with `pinball-`. On a cluster install, `ollama` is not available and `copilot` needs `--provider copilot`.
+`provider` is `copilot`, `openai`, `anthropic` or `ollama`. Names must not be `auto`, `pinball`, `light`, `standard`, `heavy` or start with `pinball-`. On a cluster install, `ollama` needs a `base_url` and `copilot` needs `--provider copilot`.
+
+An entry may set `base_url` and `api_key_env` (the **name** of an env var, never the key) to use another endpoint, e.g. Ollama Cloud. Entries with the same `(provider, base_url, api_key_env)` share one gateway provider; entries without them keep using the shared provider (local Ollama, `--ollama-url`).
+
+```yaml
+passthrough:
+  glm-5.2: {provider: ollama, model: glm-5.2, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}
+  gemma4:  {provider: ollama, model: gemma4}   # local Ollama
+```
+
+Local: export `OLLAMA_CLOUD_KEY` when running `init`/`restart`/`upgrade`; it is written to the 0600 `.env` (an existing value is kept if the variable is unset) and the config only contains `${OLLAMA_CLOUD_KEY}`. Cluster: create the Secret yourself, e.g. `kubectl -n convergence create secret generic convergence-passthrough --from-literal=OLLAMA_CLOUD_KEY=...` (name via `--passthrough-secret`); the gateway reads each key as an env var. Keys never appear in the rendered config or manifests. `STANDIN_SALT`, `GH_TOKEN`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are not allowed as `api_key_env`.
 
 Pinball's score cutoffs and per-signal points can be overridden in an optional top-level `pinball:` block of the same file (unset keys keep pinball's defaults; unknown keys are an error). Example: Pinball adds `+1` for requests with tools, which with the default `thresholds.standard: 1` puts every tool-using agent request in `standard`. To let short agent turns reach `light`:
 
