@@ -114,8 +114,6 @@ services:
         max-size: "10m"
         max-file: "3"
 
-volumes:
-  copilot-data:
 {{- end }}
 {{- if eq .Config.Sandbox "openshell" }}
 
@@ -146,6 +144,14 @@ volumes:
         max-size: "10m"
         max-file: "3"
 
+{{- end }}
+{{- if or (eq .Config.Provider "copilot") (eq .Config.Sandbox "openshell") }}
+
 volumes:
+{{- if eq .Config.Provider "copilot" }}
+  copilot-data:
+{{- end }}
+{{- if eq .Config.Sandbox "openshell" }}
   openshell-data:
+{{- end }}
 {{- end }}

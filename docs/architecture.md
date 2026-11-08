@@ -53,6 +53,8 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 
 ### Files under `~/.convergence`
 
+The optional copilot-api and OpenShell gateway are Compose services. Their named volumes, `copilot-data` and `openshell-data`, share one top-level `volumes` mapping when both are enabled.
+
 | Path | Mode | Contents |
 |---|---|---|
 | `config.yaml` | 0600 | Engine, provider, sandbox, ports, `bind_address`, provider credentials (plaintext) |
