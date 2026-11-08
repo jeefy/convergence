@@ -84,7 +84,8 @@ jobs:
 
   e2e-podman:
     name: Live Container Smoke Test (Podman, ${{ matrix.compose-provider }})
-    runs-on: ubuntu-latest
+    # Ubuntu 26.04 pasta AppArmor breaks rootless cleanup: actions/runner-images#15182.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: unit-test
     strategy:
@@ -103,13 +104,14 @@ jobs:
           sudo apt-get install -y podman uidmap slirp4netns pipx
           pipx install podman-compose==1.6.0
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          mkdir -p "$RUNNER_TEMP/compose-bin" "$RUNNER_TEMP/podman-runtime"
-          chmod 700 "$RUNNER_TEMP/podman-runtime"
+          mkdir -p "$RUNNER_TEMP/compose-bin"
+          runtime_dir="/run/user/$(id -u)"
+          sudo install -d -m 700 -o "$(id -u)" -g "$(id -g)" "$runtime_dir"
           compose=$(docker info --format '{{range .ClientInfo.Plugins}}{{if eq .Name "compose"}}{{.Path}}{{end}}{{end}}')
           test -x "$compose"
           ln -s "$compose" "$RUNNER_TEMP/compose-bin/docker-compose"
           echo "$RUNNER_TEMP/compose-bin" >> "$GITHUB_PATH"
-          echo "XDG_RUNTIME_DIR=$RUNNER_TEMP/podman-runtime" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=$runtime_dir" >> "$GITHUB_ENV"
       - name: Build binary
         run: make build
       - name: Run local live container smoke test
