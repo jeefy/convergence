@@ -24,6 +24,8 @@ type templateData struct {
 	Images       templates.Images
 	Endpoints    []models.Passthrough
 	KeyEnvs      []string
+	// StandinPatterns is the patterns file indented for a ConfigMap block scalar ("" = unset).
+	StandinPatterns string
 }
 
 func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {

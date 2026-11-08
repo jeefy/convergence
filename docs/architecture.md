@@ -34,6 +34,8 @@ Anthropic Messages requests (`/v1/messages`) are translated by agentgateway, so 
 
 ## Local mode (docker/podman compose)
 
+Before starting the stack, Convergence checks for running services so it does not treat its own published ports as conflicts. Docker uses `compose ps`; Podman uses native `ps` filtered by the rendered Compose file's `com.docker.compose.project.config_files` label and running state, reading service names from `com.docker.compose.service`. Both `podman-compose` and Docker Compose set these labels. Failed checks include stderr.
+
 ### Ports
 
 All host ports bind to `bind_address` (default `127.0.0.1`).

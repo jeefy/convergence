@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,8 +17,12 @@ import (
 
 const script = `#!/bin/sh
 echo "$@" >> "$FAKE_LOG"
-case "$*" in *" ps "*) echo "gw"; echo "pb"; exit 0;; esac
 [ -n "$FAKE_FAIL" ] && case "$*" in *"$FAKE_FAIL"*) echo boom >&2; exit 3;; esac
+case "$*" in ps\ *|*" ps "*)
+  [ -n "$FAKE_WARNING" ] && echo "$FAKE_WARNING" >&2
+  for s in $FAKE_RUNNING; do echo "$s"; done
+  exit 0;;
+esac
 exit 0
 `
 
@@ -32,6 +37,8 @@ func fakeBins(t *testing.T, names ...string) string {
 	t.Setenv("PATH", bin)
 	t.Setenv("FAKE_LOG", filepath.Join(t.TempDir(), "log"))
 	t.Setenv("FAKE_FAIL", "")
+	t.Setenv("FAKE_RUNNING", "gw pb")
+	t.Setenv("FAKE_WARNING", "")
 	return bin
 }
 
@@ -124,22 +131,50 @@ func TestCompose_errorWrapping(t *testing.T) {
 	if err := e.Start(t.Context(), dir); !strings.Contains(err.Error(), "boom") {
 		t.Errorf("output not included: %v", err)
 	}
+	t.Setenv("FAKE_FAIL", "")
 	if _, err := e.RunningServices(t.Context(), dir); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRunningServices(t *testing.T) {
-	fakeBins(t, "docker")
-	e, err := DetectEngine("")
-	if err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"docker", "podman"} {
+		t.Run(name, func(t *testing.T) {
+			fakeBins(t, name)
+			e, err := DetectEngine("")
+			if err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			t.Setenv("FAKE_WARNING", "engine warning")
+			got, err := e.RunningServices(t.Context(), dir)
+			if err != nil || len(got) != 2 || got[0] != "gw" || got[1] != "pb" {
+				t.Fatalf("got %v %v", got, err)
+			}
+			want := "compose -f " + filepath.Join(dir, "docker-compose.yaml") + " ps --services --filter status=running"
+			if name == "podman" {
+				want = "ps --filter label=com.docker.compose.project.config_files=" +
+					filepath.Join(dir, "docker-compose.yaml") +
+					` --filter status=running --format {{.Label "com.docker.compose.service"}}`
+			}
+			if got := strings.TrimSpace(logOf(t)); got != want {
+				t.Fatalf("command = %q, want %q", got, want)
+			}
+
+			t.Setenv("FAKE_RUNNING", "")
+			got, err = e.RunningServices(t.Context(), dir)
+			if err != nil || len(got) != 0 {
+				t.Fatalf("idle stack: got %v %v", got, err)
+			}
+
+			t.Setenv("FAKE_FAIL", "ps")
+			_, err = e.RunningServices(t.Context(), dir)
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 || !strings.Contains(err.Error(), "boom") {
+				t.Fatalf("expected wrapped exit error and stderr, got %v", err)
+			}
+		})
 	}
-	got, err := e.RunningServices(t.Context(), t.TempDir())
-	if err != nil || len(got) != 2 || got[0] != "gw" {
-		t.Fatalf("got %v %v", got, err)
-	}
-	t.Setenv("FAKE_FAIL", "never")
 	bad := &ComposeEngine{binary: filepath.Join(t.TempDir(), "missing")}
 	if _, err := bad.RunningServices(t.Context(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "ps failed") {
 		t.Fatalf("got %v", err)

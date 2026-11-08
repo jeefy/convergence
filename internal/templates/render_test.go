@@ -384,6 +384,19 @@ func TestOTelInvalidRejected(t *testing.T) {
 	}
 }
 
+func TestStandinPatternsFile(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.StandinPatternsFile = "/tmp/p.yaml" })
+	for _, want := range []string{"STANDIN_PATTERNS_FILE: /etc/stand-in/patterns.yaml", "- /tmp/p.yaml:/etc/stand-in/patterns.yaml:ro"} {
+		if !strings.Contains(files["docker-compose.yaml"], want) {
+			t.Errorf("compose missing %q", want)
+		}
+	}
+	_, files = render(t, func(c *config.Config) {})
+	if strings.Contains(files["docker-compose.yaml"], "PATTERNS") {
+		t.Error("unset must not render patterns")
+	}
+}
+
 func TestPassthroughEndpointRendered(t *testing.T) {
 	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
 	y := "passthrough:\n  glm-5.2: {provider: ollama, model: glm-5.2, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}\n  glm-5.1: {provider: ollama, model: glm-5.1, base_url: 'https://ollama.com', api_key_env: OLLAMA_CLOUD_KEY}\n  gemma4: {provider: ollama, model: gemma4}\n"

@@ -26,10 +26,14 @@ var clusterInstallCmd = &cobra.Command{
 		anthropicKey, _ := cmd.Flags().GetString("anthropic-key")
 		optSchedule, _ := cmd.Flags().GetString("opt-schedule")
 		optDSN, _ := cmd.Flags().GetString("optimizer-dsn")
+		rlDB, _ := cmd.Flags().GetString("request-log-db")
+		rlPG, _ := cmd.Flags().GetBool("request-log-postgres")
+		rlPass, _ := cmd.Flags().GetString("request-log-postgres-password")
 		failOpen, _ := cmd.Flags().GetBool("fail-open")
 		otelEndpoint, _ := cmd.Flags().GetString("otel-endpoint")
 		otelProtocol, _ := cmd.Flags().GetString("otel-protocol")
 		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
+		patternsFile, _ := cmd.Flags().GetString("standin-patterns-file")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
 		ptSecret, _ := cmd.Flags().GetString("passthrough-secret")
@@ -42,25 +46,29 @@ var clusterInstallCmd = &cobra.Command{
 		imgCopilot, _ := cmd.Flags().GetString("image-copilot-api")
 
 		opts := &k8s.ClusterOptions{
-			Namespace:         ns,
-			Provider:          prov,
-			CopilotToken:      copilotTok,
-			OpenAIKey:         openaiKey,
-			AnthropicKey:      anthropicKey,
-			OptSchedule:       optSchedule,
-			OptimizerDSN:      optDSN,
-			FailOpen:          failOpen,
-			OTel:              config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
-			OpenAIBaseURL:     openaiBase,
-			ModelsFile:        modelsFile,
-			PassthroughSecret: ptSecret,
-			IngressHost:       ingressHost,
-			EnablePDB:         enablePDB,
-			DryRun:            dryRun,
-			ImageAgentGateway: imgAGW,
-			ImageStandIn:      imgStandIn,
-			ImagePinball:      imgPinball,
-			ImageCopilotAPI:   imgCopilot,
+			Namespace:            ns,
+			Provider:             prov,
+			CopilotToken:         copilotTok,
+			OpenAIKey:            openaiKey,
+			AnthropicKey:         anthropicKey,
+			OptSchedule:          optSchedule,
+			OptimizerDSN:         optDSN,
+			RequestLogDB:         rlDB,
+			RequestLogPostgres:   rlPG,
+			RequestLogPGPassword: rlPass,
+			FailOpen:             failOpen,
+			OTel:                 config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
+			StandinPatternsFile:  patternsFile,
+			OpenAIBaseURL:        openaiBase,
+			ModelsFile:           modelsFile,
+			PassthroughSecret:    ptSecret,
+			IngressHost:          ingressHost,
+			EnablePDB:            enablePDB,
+			DryRun:               dryRun,
+			ImageAgentGateway:    imgAGW,
+			ImageStandIn:         imgStandIn,
+			ImagePinball:         imgPinball,
+			ImageCopilotAPI:      imgCopilot,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -160,10 +168,14 @@ func init() {
 	clusterInstallCmd.Flags().String("otel-endpoint", "", "Export OTLP traces to this collector host:port (default: off)")
 	clusterInstallCmd.Flags().String("otel-protocol", "", "OTLP protocol: grpc (default) or http")
 	clusterInstallCmd.Flags().Float64("otel-sample", 0, "Trace sampling rate 0..1 (default 1)")
+	clusterInstallCmd.Flags().String("request-log-db", "", "Postgres DSN for agentgateway's request log (llm: full, STORES PROMPTS after Stand-In scrubbing); also enables the optimizer CronJob. Stored in Secret pinball-optimizer-db")
+	clusterInstallCmd.Flags().Bool("request-log-postgres", false, "Run a small Postgres (StatefulSet, 5Gi PVC) in the namespace as the request log; same effect as --request-log-db")
+	clusterInstallCmd.Flags().String("request-log-postgres-password", "", "Password for --request-log-postgres (default: generated; pass the existing one when re-installing, the PVC keeps the first)")
 	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
 	clusterInstallCmd.Flags().String("passthrough-secret", "convergence-passthrough", "Existing Secret in the namespace whose keys are the passthrough api_key_env names")
+	clusterInstallCmd.Flags().String("standin-patterns-file", "", "Stand-In patterns.yaml (replaces the image default; rendered into ConfigMap stand-in-patterns)")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")
 	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")
