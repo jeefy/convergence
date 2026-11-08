@@ -97,11 +97,27 @@ type Config struct {
 	OllamaModelStandard string `yaml:"ollama_model_standard,omitempty"`
 	OllamaModelHeavy    string `yaml:"ollama_model_heavy,omitempty"`
 
+	ComposeProvider string `yaml:"compose_provider,omitempty"`
+
 	ImageAgentGateway     string `yaml:"image_agentgateway,omitempty"`
 	ImageStandIn          string `yaml:"image_standin,omitempty"`
 	ImagePinball          string `yaml:"image_pinball,omitempty"`
 	ImageCopilotAPI       string `yaml:"image_copilot_api,omitempty"`
 	ImageOpenShellGateway string `yaml:"image_openshell_gateway,omitempty"`
+}
+
+func (c *Config) ValidateComposeProvider() error {
+	switch c.ComposeProvider {
+	case "", "auto":
+		return nil
+	case "docker-compose", "podman-compose":
+		if c.Engine != "podman" {
+			return fmt.Errorf("compose_provider %q requires engine podman", c.ComposeProvider)
+		}
+		return nil
+	default:
+		return fmt.Errorf("invalid compose_provider %q (want auto, docker-compose or podman-compose)", c.ComposeProvider)
+	}
 }
 
 // OTel configures optional OTLP trace export from agentgateway. Zero value
@@ -243,6 +259,9 @@ func LoadConfig() (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
+	}
+	if err := cfg.ValidateComposeProvider(); err != nil {
+		return nil, fmt.Errorf("validating config %s: %w", path, err)
 	}
 	if cfg.StandinSalt == "" {
 		if cfg.StandinSalt, err = GenerateSalt(); err != nil {

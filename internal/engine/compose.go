@@ -21,7 +21,8 @@ import (
 var ErrNoEngine = errors.New("no container engine found: install Docker (https://docs.docker.com/get-docker/) or Podman (https://podman.io/docs/installation) and make sure it is on your PATH")
 
 type ComposeEngine struct {
-	binary string
+	binary          string
+	composeProvider string
 }
 
 // DetectEngine prefers the configured engine, then docker, then podman.
@@ -44,9 +45,35 @@ func (e *ComposeEngine) Name() string {
 	return filepath.Base(e.binary)
 }
 
+func (e *ComposeEngine) SetComposeProvider(provider string) error {
+	cfg := config.Config{Engine: e.Name(), ComposeProvider: provider}
+	if err := cfg.ValidateComposeProvider(); err != nil {
+		return err
+	}
+	if provider == "" || provider == "auto" {
+		e.composeProvider = ""
+		return nil
+	}
+	path, err := exec.LookPath(provider)
+	if err != nil {
+		return fmt.Errorf("compose provider %q is not available on PATH: %w", provider, err)
+	}
+	e.composeProvider = path
+	return nil
+}
+
+// ComposeCommand preserves Podman's provider selection unless explicitly overridden.
+func ComposeCommand(ctx context.Context, binary, provider string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, binary, append([]string{"compose"}, args...)...)
+	if provider != "" && provider != "auto" {
+		cmd.Env = append(os.Environ(), "PODMAN_COMPOSE_PROVIDER="+provider)
+	}
+	return cmd
+}
+
 func (e *ComposeEngine) composeCmd(ctx context.Context, dir string, args ...string) *exec.Cmd {
-	fullArgs := append([]string{"compose", "-f", filepath.Join(dir, "docker-compose.yaml")}, args...)
-	cmd := exec.CommandContext(ctx, e.binary, fullArgs...)
+	fullArgs := append([]string{"-f", filepath.Join(dir, "docker-compose.yaml")}, args...)
+	cmd := ComposeCommand(ctx, e.binary, e.composeProvider, fullArgs...)
 	cmd.Dir = dir
 	return cmd
 }

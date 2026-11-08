@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,7 +45,7 @@ type Env struct {
 	CopilotURL string
 	Services   ServiceChecker
 	// Run executes an external command (container engine probes).
-	Run func(ctx context.Context, name string, args ...string) error
+	Run func(cmd *exec.Cmd) error
 }
 
 // NewEnv builds an Env for a loaded config.

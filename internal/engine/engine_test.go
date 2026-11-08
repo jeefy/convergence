@@ -17,6 +17,7 @@ import (
 
 const script = `#!/bin/sh
 echo "$@" >> "$FAKE_LOG"
+[ -n "$FAKE_PROVIDER_LOG" ] && echo "$PODMAN_COMPOSE_PROVIDER" >> "$FAKE_PROVIDER_LOG"
 [ -n "$FAKE_FAIL" ] && case "$*" in *"$FAKE_FAIL"*) echo boom >&2; exit 3;; esac
 case "$*" in ps\ *|*" ps "*)
   [ -n "$FAKE_WARNING" ] && echo "$FAKE_WARNING" >&2
@@ -104,6 +105,77 @@ func TestCompose_commandSelection(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in\n%s", want, got)
 		}
+	}
+}
+
+func TestComposeProviderSelection(t *testing.T) {
+	for _, provider := range []string{"", "auto", "podman-compose", "docker-compose"} {
+		t.Run(provider, func(t *testing.T) {
+			bin := fakeBins(t, "podman", "podman-compose", "docker-compose")
+			t.Setenv("PODMAN_COMPOSE_PROVIDER", "inherited-provider")
+			log := filepath.Join(t.TempDir(), "provider.log")
+			t.Setenv("FAKE_PROVIDER_LOG", log)
+			e, err := DetectEngine("podman")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := e.SetComposeProvider(provider); err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			for _, operation := range []func(context.Context, string) error{
+				e.Start, e.Stop, e.Restart, e.Down, e.Pull,
+			} {
+				if err := operation(t.Context(), dir); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := e.Logs(t.Context(), dir, true, "pinball"); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "inherited-provider"
+			if provider != "" && provider != "auto" {
+				want = filepath.Join(bin, provider)
+			}
+			if got := string(data); got != strings.Repeat(want+"\n", 6) {
+				t.Fatalf("provider selection: %q, want six uses of %q", got, want)
+			}
+			if _, err := e.RunningServices(t.Context(), dir); err != nil {
+				t.Fatal(err)
+			}
+			data, err = os.ReadFile(log)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasSuffix(string(data), "inherited-provider\n") {
+				t.Fatal("native podman ps must not receive the Compose override")
+			}
+		})
+	}
+}
+
+func TestComposeProviderRejectsUnavailableSelection(t *testing.T) {
+	for _, tc := range []struct {
+		engine, provider, wantErr string
+	}{
+		{"podman", "podman-compose", "not available on PATH"},
+		{"docker", "podman-compose", "requires engine podman"},
+		{"podman", "invalid", "invalid compose_provider"},
+	} {
+		t.Run(tc.engine+"/"+tc.provider, func(t *testing.T) {
+			fakeBins(t, tc.engine)
+			e, err := DetectEngine(tc.engine)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := e.SetComposeProvider(tc.provider); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("got %v, want %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 

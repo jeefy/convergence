@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tests/test_e2e_local.sh - E2E: real requests through AgentGateway -> Stand-In -> Pinball -> stub upstream.
 # Runs once per available engine (docker, podman). Override with ENGINES="docker".
+# COMPOSE_PROVIDER selects auto, docker-compose or podman-compose for Podman.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +24,7 @@ STUB_NAME="convergence-e2e-stub-$$"
 export COMPOSE_PROJECT_NAME="cvg-e2e-$$"
 CUR_ENGINE=""
 PODMAN_SVC_PID=""
+COMPOSE_PROVIDER="${COMPOSE_PROVIDER:-auto}"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -31,7 +33,7 @@ dump_diagnostics() { # best-effort container state and logs, so CI failures are 
   echo "==> DIAGNOSTICS ($CUR_ENGINE)" >&2
   "$CUR_ENGINE" ps -a --format '{{.Names}}\t{{.Status}}' 2>&1 | head -20 >&2 || true
   local c
-  for c in $("$CUR_ENGINE" ps -a --format '{{.Names}}' 2>/dev/null | grep -E "^(convergence|${COMPOSE_PROJECT_NAME})-" || true); do
+  for c in $("$CUR_ENGINE" ps -a --format '{{.Names}}' 2>/dev/null | grep -E "^(convergence|${COMPOSE_PROJECT_NAME})[-_]" || true); do
     echo "--- $c health:" >&2
     "$CUR_ENGINE" inspect --format '{{json .State.Health}}' "$c" 2>&1 | cut -c1-1500 >&2 || true
     echo "--- $c logs (tail):" >&2
@@ -79,8 +81,12 @@ run_suite() {
   TEST_HOME="$(mktemp -d -t convergence-e2e-XXXXXX)"
   export HOME="$TEST_HOME"
   local cfgdir="$TEST_HOME/.convergence"
+  local compose_args=()
+  if [ "$engine" = podman ]; then
+    compose_args=(--compose-provider "$COMPOSE_PROVIDER")
+  fi
 
-  if [ "$engine" = podman ] && [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock" ]; then
+  if [ "$engine" = podman ] && [ "$COMPOSE_PROVIDER" != podman-compose ] && [ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock" ]; then
     echo "==> Starting temporary podman API socket (compose provider needs it)"
     mkdir -p "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman"
     podman system service --time=0 >/dev/null 2>&1 &
@@ -97,13 +103,16 @@ run_suite() {
 
   echo "==> convergence init (provider ollama -> stub on host port $sport)"
   if "$BIN" init --help 2>&1 | grep -q -- '--yes'; then
-    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine"
+    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" "${compose_args[@]}"
   else
     printf '3\nhttp://host.docker.internal:%s\n' "$sport" | "$BIN" init
   fi
   # force the engine under test (older init detects docker first)
   if grep -q '^engine:' "$cfgdir/config.yaml"; then
     sed -i "s/^engine:.*/engine: $engine/" "$cfgdir/config.yaml"
+  fi
+  if [ "$engine" = podman ]; then
+    grep -q "^compose_provider: $COMPOSE_PROVIDER$" "$cfgdir/config.yaml" || fail "compose provider not persisted"
   fi
   chmod 755 "$cfgdir"; chmod 644 "$cfgdir"/*.yaml
 
@@ -229,7 +238,7 @@ print(out)')"
 
   echo "==> fail-closed default: requests are rejected while Stand-In is down"
   local standin_c
-  standin_c="$("$engine" ps --format '{{.Names}}' | grep "^${COMPOSE_PROJECT_NAME}-stand-in" | head -1)"
+  standin_c="$("$engine" ps --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}[-_]stand-in" | head -1)"
   [ -n "$standin_c" ] || fail "stand-in container not found"
   "$engine" stop "$standin_c" >/dev/null
   local code
@@ -241,13 +250,16 @@ print(out)')"
   echo "==> --fail-open + OTel flags re-render and the stack serves again"
   "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" \
     --fail-open --otel-endpoint 127.0.0.1:4317 --otel-sample 0.5 >/dev/null
+  if [ "$engine" = podman ]; then
+    grep -q "^compose_provider: $COMPOSE_PROVIDER$" "$cfgdir/config.yaml" || fail "re-init lost compose provider"
+  fi
   if grep -q '^engine:' "$cfgdir/config.yaml"; then sed -i "s/^engine:.*/engine: $engine/" "$cfgdir/config.yaml"; fi
   chmod 755 "$cfgdir"; chmod 644 "$cfgdir"/*.yaml
   grep -q 'failureMode: failOpen' "$cfgdir/agentgateway.yaml" || fail "failOpen not rendered"
   grep -q 'tracing:' "$cfgdir/agentgateway.yaml" || fail "otel tracing not rendered"
   "$BIN" restart
   wait_for "gateway after fail-open restart" 30 curl -sf "http://127.0.0.1:$GW/v1/models"
-  standin_c="$("$engine" ps --format '{{.Names}}' | grep "^${COMPOSE_PROJECT_NAME}-stand-in" | head -1)"
+  standin_c="$("$engine" ps --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}[-_]stand-in" | head -1)"
   "$engine" stop "$standin_c" >/dev/null
   code="$(curl -s -o /dev/null -w '%{http_code}' -m 30 "http://127.0.0.1:$GW/v1/chat/completions" \
     -H 'Content-Type: application/json' -d "$body")"
@@ -263,9 +275,9 @@ print(out)')"
     echo "WARN: podman down failed, retrying"
     sleep 2
     "$BIN" down || "$engine" ps -a --format '{{.Names}}' \
-      | grep -E "^${COMPOSE_PROJECT_NAME}-" | xargs -r "$engine" rm -f >/dev/null 2>&1 || true
+      | grep -E "^${COMPOSE_PROJECT_NAME}[-_]" | xargs -r "$engine" rm -f >/dev/null 2>&1 || true
   fi
-  [ -z "$("$engine" ps -a --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}-(agentgateway|stand-in|pinball)" || true)" ] || fail "stack containers remain after down"
+  [ -z "$("$engine" ps -a --format '{{.Names}}' | grep -E "^${COMPOSE_PROJECT_NAME}[-_](agentgateway|stand-in|pinball)" || true)" ] || fail "stack containers remain after down"
   "$BIN" uninstall --purge --yes
   [ ! -e "$cfgdir" ] || fail "uninstall --purge left $cfgdir"
   "$engine" rm -f "$STUB_NAME" >/dev/null 2>&1 || true
