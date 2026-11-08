@@ -39,6 +39,9 @@ func loadStack() (*stack, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := eng.SetComposeProvider(cfg.ComposeProvider); err != nil {
+		return nil, err
+	}
 	return &stack{cfg: cfg, dir: dir, eng: eng}, nil
 }
 

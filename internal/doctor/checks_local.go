@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/engine"
 )
 
 // CheckConfig verifies config.yaml exists and parses and that .env is 0600.
@@ -47,13 +49,25 @@ func CheckEngine(ctx context.Context, e *Env) Result {
 	if bin == "" {
 		bin = "docker"
 	}
-	if err := e.Run(ctx, bin, "info"); err != nil {
-		return Result{name, Fail, fmt.Sprintf("'%s info' failed: %v", bin, err), "start the " + bin + " daemon/socket (e.g. 'systemctl --user start podman.socket')"}
+	if err := e.Cfg.ValidateComposeProvider(); err != nil {
+		return Result{name, Fail, err.Error(), "fix compose_provider in ~/.convergence/config.yaml"}
 	}
-	if err := e.Run(ctx, bin, "compose", "version"); err != nil {
-		return Result{name, Fail, fmt.Sprintf("'%s compose version' failed: %v", bin, err), "install the compose plugin (docker-compose-plugin or podman-compose)"}
+	if err := e.Run(exec.CommandContext(ctx, bin, "info")); err != nil {
+		fix := "start the Docker daemon"
+		if bin == "podman" {
+			fix = "check 'podman info' and rootless storage/session configuration"
+		}
+		return Result{name, Fail, fmt.Sprintf("'%s info' failed: %v", bin, err), fix}
 	}
-	return Result{name, Pass, bin + " reachable, compose available", ""}
+	provider := e.Cfg.ComposeProvider
+	if err := e.Run(engine.ComposeCommand(ctx, bin, provider, "version")); err != nil {
+		fix := "install the compose plugin (docker-compose-plugin or podman-compose)"
+		if provider != "" && provider != "auto" {
+			fix = "install " + provider + " on PATH, or set compose_provider: auto"
+		}
+		return Result{name, Fail, fmt.Sprintf("'%s compose version' failed (provider=%s): %v", bin, orDefault(provider, "auto"), err), fix}
+	}
+	return Result{name, Pass, bin + " reachable, compose available (provider=" + orDefault(provider, "auto") + ")", ""}
 }
 
 // CheckServices reports each service's running/healthy state via the health package.

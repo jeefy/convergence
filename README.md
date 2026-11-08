@@ -81,6 +81,8 @@ convergence init --yes --engine podman --provider direct \
   --openai-key "$OPENAI_API_KEY" --anthropic-key "$ANTHROPIC_API_KEY" --port 3000
 ```
 
+For Podman, `init --engine podman --compose-provider podman-compose` selects the daemonless Compose provider. `--compose-provider docker-compose` selects Docker Compose talking to Podman's API socket. The choice is saved as `compose_provider` in `config.yaml` and used by lifecycle commands and `doctor`. Omitted flags keep the saved choice; `--compose-provider auto` restores Podman's default selection, including `PODMAN_COMPOSE_PROVIDER` and `containers.conf`. Explicit choices override that environment variable and must be installed on `PATH`. Docker Engine is unchanged.
+
 With an isolated sandbox:
 
 ```bash
@@ -212,7 +214,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 | Command | Description |
 |---|---|
-| `init [--yes] [--provider P] [--engine docker\|podman] [--sandbox S] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--image-openshell IMG]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
+| `init [--yes] [--provider P] [--engine docker\|podman] [--compose-provider auto\|docker-compose\|podman-compose] [--sandbox S] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--image-openshell IMG]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
 | `login copilot` | GitHub device-flow login; stores the token for the Copilot provider. |
 | `start [--strict]` / `stop` / `restart` / `down` | Manage the local containers. `--strict` fails (instead of warning) when Ollama lacks a mapped model. `down` stops and removes containers and networks. |
 | `prune` | Remove dangling images, stopped containers, and unused networks. |
@@ -328,7 +330,7 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 **Port already in use.** Another process has `3000` (or `4141`, `9102`, `9201`, `15020`). Find it with `ss -ltnp | grep 3000` (Linux) or `lsof -i :3000` (macOS). Re-run `convergence init --port 3100` for the gateway; the other ports are fixed.
 
-**Podman rootless permission errors.** Make sure the user socket is running (`systemctl --user enable --now podman.socket`) and that `podman-compose` or `podman compose` works on its own. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
+**Podman rootless errors.** Check that `podman info` works first. If using Docker Compose, enable Podman's user API socket (`systemctl --user enable --now podman.socket`). `podman-compose` does not require that socket; select it with `convergence init --engine podman --compose-provider podman-compose`. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
 
 **Podman exits with status 125 during startup.** Running-service checks use native `podman ps`, compatible with either Compose provider. Check the stderr included in the error and try `podman ps` directly to diagnose storage or permission failures.
 

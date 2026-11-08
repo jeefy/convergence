@@ -65,8 +65,8 @@ func runDoctor(ctx context.Context) []doctor.Result {
 	if doctorGateway != "" {
 		env.GatewayURL = doctorGateway
 	}
-	env.Run = func(ctx context.Context, name string, args ...string) error {
-		if out, err := exec.CommandContext(ctx, name, args...).CombinedOutput(); err != nil {
+	env.Run = func(cmd *exec.Cmd) error {
+		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("%w: %.120s", err, out)
 		}
 		return nil

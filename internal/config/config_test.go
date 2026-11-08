@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,6 +69,42 @@ func TestLoadConfigRejectsCorruptFile(t *testing.T) {
 	}
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("expected parse error for corrupt config")
+	}
+}
+
+func TestLoadConfigComposeProvider(t *testing.T) {
+	for _, tc := range []struct {
+		engine, provider, wantErr string
+	}{
+		{"podman", "", ""},
+		{"podman", "auto", ""},
+		{"podman", "docker-compose", ""},
+		{"podman", "podman-compose", ""},
+		{"docker", "auto", ""},
+		{"docker", "podman-compose", "requires engine podman"},
+		{"podman", "unknown", "invalid compose_provider"},
+	} {
+		t.Run(tc.engine+"/"+tc.provider, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			cfg := DefaultConfig()
+			cfg.Engine, cfg.ComposeProvider = tc.engine, tc.provider
+			if err := SaveConfig(cfg); err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := LoadConfig()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("got %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if loaded.ComposeProvider != tc.provider {
+				t.Fatalf("provider=%q, want %q", loaded.ComposeProvider, tc.provider)
+			}
+		})
 	}
 }
 

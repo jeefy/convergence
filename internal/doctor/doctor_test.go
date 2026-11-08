@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -251,9 +252,9 @@ func TestCheckEngine(t *testing.T) {
 	var calls []string
 	for name, failOn := range map[string]string{"ok": "", "info fails": "info", "no compose": "compose"} {
 		calls = nil
-		e.Run = func(_ context.Context, n string, a ...string) error {
-			calls = append(calls, a[0])
-			if a[0] == failOn {
+		e.Run = func(cmd *exec.Cmd) error {
+			calls = append(calls, cmd.Args[1])
+			if cmd.Args[1] == failOn {
 				return fmt.Errorf("boom")
 			}
 			return nil
@@ -263,6 +264,51 @@ func TestCheckEngine(t *testing.T) {
 		if r.Status != want {
 			t.Fatalf("%s: %+v", name, r)
 		}
+	}
+}
+
+func TestCheckEngineComposeProvider(t *testing.T) {
+	t.Setenv("PODMAN_COMPOSE_PROVIDER", "inherited-provider")
+	for _, provider := range []string{"", "auto", "docker-compose", "podman-compose"} {
+		t.Run(provider, func(t *testing.T) {
+			e := newEnv(t)
+			e.Cfg.Engine, e.Cfg.ComposeProvider = "podman", provider
+			e.Run = func(cmd *exec.Cmd) error {
+				if cmd.Args[1] != "compose" {
+					return nil
+				}
+				got := ""
+				for _, value := range cmd.Environ() {
+					if strings.HasPrefix(value, "PODMAN_COMPOSE_PROVIDER=") {
+						got = strings.TrimPrefix(value, "PODMAN_COMPOSE_PROVIDER=")
+					}
+				}
+				want := provider
+				if provider == "" || provider == "auto" {
+					want = "inherited-provider"
+				}
+				if got != want {
+					t.Errorf("doctor probed provider %q, want %q", got, want)
+				}
+				return nil
+			}
+			if r := CheckEngine(t.Context(), e); r.Status != Pass {
+				t.Fatalf("got %+v", r)
+			}
+			e.Run = func(cmd *exec.Cmd) error {
+				if cmd.Args[1] == "compose" {
+					return fmt.Errorf("provider unavailable")
+				}
+				return nil
+			}
+			r := CheckEngine(t.Context(), e)
+			if r.Status != Fail || !strings.Contains(r.Detail, "provider=") {
+				t.Fatalf("missing provider diagnosis: %+v", r)
+			}
+			if provider == "podman-compose" && strings.Contains(r.Hint, "socket") {
+				t.Fatalf("podman-compose does not need a socket: %+v", r)
+			}
+		})
 	}
 }
 
@@ -400,7 +446,7 @@ func TestCheckE2E(t *testing.T) {
 func TestRunOnlyIncludesE2EWhenRequested(t *testing.T) {
 	f := &fakeStack{respond: func(string) (int, string) { return 200, `{}` }}
 	e := f.env(t)
-	e.Run = func(context.Context, string, ...string) error { return nil }
+	e.Run = func(*exec.Cmd) error { return nil }
 	e.Services = fakeSvc{}
 	for _, on := range []bool{false, true} {
 		has := false

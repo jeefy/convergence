@@ -12,6 +12,18 @@ import (
 	"github.com/jeefy/convergence/internal/config"
 )
 
+func TestLifecycleUsesSavedComposeProvider(t *testing.T) {
+	e := newFakeEnv(t, "podman", "podman-compose")
+	t.Setenv("PODMAN_COMPOSE_PROVIDER", "docker-compose")
+	e.saveCfg(t, func(c *config.Config) {
+		c.Engine, c.ComposeProvider = "podman", "podman-compose"
+	})
+	if err := runCLI(t, "stop"); err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, e.envLog(t), "COMPOSE_PROVIDER="+filepath.Join(os.Getenv("PATH"), "podman-compose"))
+}
+
 func TestStart_when_notInitialized(t *testing.T) {
 	newFakeEnv(t, "docker")
 	err := runCLI(t, "start")

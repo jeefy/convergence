@@ -103,3 +103,56 @@ func TestResolveConfig_imageOverrides(t *testing.T) {
 		t.Errorf("image overrides not set in config: %+v", *cfg)
 	}
 }
+
+func TestInitComposeProvider(t *testing.T) {
+	for _, provider := range []string{"podman-compose", "docker-compose"} {
+		t.Run(provider, func(t *testing.T) {
+			newFakeEnv(t, "docker", "podman", provider)
+			args := []string{"init", "--yes", "--engine", "podman", "--provider", "direct"}
+			if err := runCLI(t, append(args, "--compose-provider", provider)...); err != nil {
+				t.Fatal(err)
+			}
+			for _, override := range []string{"", "auto"} {
+				resetFlags(rootCmd)
+				next := []string{"init", "--yes", "--provider", "direct"}
+				want := provider
+				if override != "" {
+					next = append(next, "--compose-provider", override)
+					want = override
+				}
+				if err := runCLI(t, next...); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := config.LoadConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cfg.ComposeProvider != want {
+					t.Fatalf("provider=%q, want %q", cfg.ComposeProvider, want)
+				}
+			}
+		})
+	}
+}
+
+func TestInitComposeProviderErrors(t *testing.T) {
+	for _, tc := range []struct {
+		engine, provider, wantErr string
+	}{
+		{"podman", "invalid", "invalid compose_provider"},
+		{"docker", "podman-compose", "requires engine podman"},
+		{"podman", "podman-compose", "not available on PATH"},
+	} {
+		t.Run(tc.engine+"/"+tc.provider, func(t *testing.T) {
+			newFakeEnv(t, tc.engine)
+			err := runCLI(t, "init", "--yes", "--engine", tc.engine, "--compose-provider", tc.provider)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("got %v, want %q", err, tc.wantErr)
+			}
+
+			if exists, err := config.Exists(); err != nil || exists {
+				t.Fatalf("invalid provider must not save config: exists=%v, err=%v", exists, err)
+			}
+		})
+	}
+}

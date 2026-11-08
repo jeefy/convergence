@@ -37,6 +37,8 @@ type initFlags struct {
 	ollamaStd    string
 	ollamaHeavy  string
 
+	composeProvider string
+
 	imageAGW        string
 	imageStandIn    string
 	imagePinball    string
@@ -141,6 +143,12 @@ func (p *prompter) chooseProvider(flagVal string, current config.ProviderType) (
 // resolveConfig merges flags and prompt answers into cfg (loaded or default).
 // The Stand-In salt is never touched here.
 func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
+	if f.composeProvider != "" {
+		cfg.ComposeProvider = f.composeProvider
+	}
+	if err := cfg.ValidateComposeProvider(); err != nil {
+		return err
+	}
 	provider, err := p.chooseProvider(f.provider, cfg.Provider)
 	if err != nil {
 		return err
@@ -274,22 +282,28 @@ kept unless you enter a new value or confirm replacing them (--yes skips all
 prompts and confirmations).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("=== Convergence Setup Wizard ===")
-		eng, err := detectInitEngine(initOpts.engine)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Using container engine: %s\n\n", eng.Name())
-
 		// LoadConfig returns defaults (fresh salt) only when no config exists;
 		// a corrupt config is an error, never silently replaced.
 		cfg, err := config.LoadConfig()
 		if err != nil {
 			return err
 		}
+		engineChoice := initOpts.engine
+		if engineChoice == "" && cfg.ComposeProvider != "" && cfg.ComposeProvider != "auto" {
+			engineChoice = cfg.Engine
+		}
+		eng, err := detectInitEngine(engineChoice)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Using container engine: %s\n\n", eng.Name())
 		cfg.Engine = eng.Name()
 
 		p := &prompter{in: bufio.NewReader(os.Stdin), out: os.Stdout, yes: initOpts.yes}
 		if err := resolveConfig(cfg, initOpts, p); err != nil {
+			return err
+		}
+		if err := eng.SetComposeProvider(cfg.ComposeProvider); err != nil {
 			return err
 		}
 		if err := config.SaveConfig(cfg); err != nil {
@@ -324,6 +338,7 @@ func init() {
 	f.BoolVarP(&initOpts.yes, "yes", "y", false, "Non-interactive: never prompt, keep existing values, allow overwriting keys")
 	f.StringVar(&initOpts.provider, "provider", "", "LLM backend: copilot, direct or ollama")
 	f.StringVar(&initOpts.engine, "engine", "", "Container engine: docker or podman (default: auto-detect)")
+	f.StringVar(&initOpts.composeProvider, "compose-provider", "", "Podman Compose provider: auto, docker-compose or podman-compose (default: keep existing, otherwise auto)")
 	f.StringVar(&initOpts.copilotToken, "copilot-token", "", "GitHub OAuth token for copilot-api (see 'convergence login copilot')")
 	f.StringVar(&initOpts.openAIKey, "openai-key", "", "OpenAI API key (direct provider)")
 	f.StringVar(&initOpts.anthropicKey, "anthropic-key", "", "Anthropic API key (direct provider)")
