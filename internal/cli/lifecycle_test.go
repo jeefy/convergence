@@ -110,7 +110,7 @@ func TestStart_when_composeUpFails(t *testing.T) {
 	e.saveCfg(t, nil)
 	t.Setenv("FAKE_FAIL", "up -d")
 	err := runCLI(t, "start")
-	if err == nil || !strings.Contains(err.Error(), "compose up -d failed") || !strings.Contains(err.Error(), "boom") {
+	if err == nil || !strings.Contains(err.Error(), "compose up -d failed") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -151,6 +151,48 @@ func TestStart_when_healthy(t *testing.T) {
 				t.Errorf("assets not rendered: %v", err)
 			}
 		})
+	}
+}
+
+func TestStartPodmanOpenShellSocket(t *testing.T) {
+	e := newFakeEnv(t, "podman")
+	socket := filepath.Join(t.TempDir(), "podman.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	t.Setenv("FAKE_SOCKET", socket)
+	e.saveCfg(t, func(c *config.Config) {
+		c.Engine = "podman"
+		c.Sandbox = config.SandboxOpenShell
+		c.GatewayPort = healthyGateway(t)
+	})
+	if err := runCLI(t, "start"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(e.dir, "docker-compose.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `source: "`+socket+`"`) {
+		t.Fatalf("Podman socket missing from compose: %s", data)
+	}
+}
+
+func TestStartPodmanOpenShellWithoutSocket(t *testing.T) {
+	e := newFakeEnv(t, "podman")
+	t.Setenv("FAKE_SOCKET", filepath.Join(t.TempDir(), "missing.sock"))
+	e.saveCfg(t, func(c *config.Config) {
+		c.Engine = "podman"
+		c.Sandbox = config.SandboxOpenShell
+	})
+	err := runCLI(t, "start")
+	if err == nil || !strings.Contains(err.Error(), "podman.socket") {
+		t.Fatalf("expected socket setup hint, got %v", err)
+	}
+	if strings.Contains(e.calls(t), "up -d") {
+		t.Fatal("must not start compose without the socket")
 	}
 }
 

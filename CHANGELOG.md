@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - `--extproc-timeout` flag for `init` and `cluster install` (config field `extproc_timeout`) to configure the ext_proc `requestTimeout` (default `5s`, unchanged).
 
+### Fixed
+
+- OpenShell on Podman: discover and mount the Podman API socket and select OpenShell's Podman driver. On Linux, the OpenShell gateway disables SELinux labeling to access the socket.
+- Podman startup: detect `nft` builds without JSON support before Compose starts and stream Compose startup output.
+
 ## [0.2.4] - 2026-11-08
 
 ### Changed

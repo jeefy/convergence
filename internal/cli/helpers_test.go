@@ -20,7 +20,10 @@ const fakeEngineScript = `#!/bin/sh
 echo "$@" >> "$FAKE_LOG"
 echo "DSN=$PINBALL_OPT_DB_DSN" >> "$FAKE_LOG.env"
 echo "COMPOSE_PROVIDER=$PODMAN_COMPOSE_PROVIDER" >> "$FAKE_LOG.env"
-case "$*" in ps\ *|*" ps "*) for s in $FAKE_RUNNING; do echo "$s"; done; exit 0;; esac
+case "$*" in
+  ps\ *|*" ps "*) for s in $FAKE_RUNNING; do echo "$s"; done; exit 0;;
+  info\ *RemoteSocket.Path*) echo "$FAKE_SOCKET"; exit 0;;
+esac
 if [ -n "$FAKE_FAIL" ]; then
   case "$*" in *"$FAKE_FAIL"*) echo boom >&2; exit 1;; esac
 fi

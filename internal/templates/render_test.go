@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -105,6 +106,39 @@ func TestRenderOpenShellSandbox(t *testing.T) {
 	}
 	if !strings.Contains(string(tomlData), "version = 2") {
 		t.Errorf("expected schema version 2 in openshell.toml")
+	}
+	if !strings.Contains(string(tomlData), `compute_driver = "docker"`) || strings.Contains(string(composeData), "label=disable") {
+		t.Error("Docker must retain its driver and SELinux labeling")
+	}
+}
+
+func TestRenderOpenShellSocket(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Sandbox = config.SandboxOpenShell
+	dir := t.TempDir()
+	socket := "/run/user/1000/podman/$special.sock"
+	if err := RenderAssetsWithSocket(cfg, dir, "podman", socket); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ComposeFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `source: "/run/user/1000/podman/$$special.sock"`) ||
+		!strings.Contains(string(data), "target: /var/run/docker.sock") {
+		t.Fatalf("OpenShell socket not rendered correctly:\n%s", data)
+	}
+	if runtime.GOOS == "linux" && !strings.Contains(string(data), "label=disable") {
+		t.Fatal("Podman OpenShell must be able to access the host socket on SELinux")
+	}
+	toml, err := os.ReadFile(filepath.Join(dir, "openshell.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(toml), `compute_driver = "podman"`) ||
+		!strings.Contains(string(toml), "[openshell.drivers.podman]") ||
+		strings.Contains(string(toml), "sandbox_label") {
+		t.Fatalf("unexpected Podman driver config:\n%s", toml)
 	}
 }
 

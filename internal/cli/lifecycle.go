@@ -80,7 +80,18 @@ func (s *stack) up(ctx context.Context) error {
 	if err := checkSecrets(s.cfg); err != nil {
 		return err
 	}
-	if err := templates.RenderAssets(s.cfg, s.dir); err != nil {
+	if err := s.eng.CheckPodmanNft(ctx); err != nil {
+		return err
+	}
+	socket := "/var/run/docker.sock"
+	if s.eng.Name() == "podman" && s.cfg.Sandbox == config.SandboxOpenShell {
+		var err error
+		socket, err = s.eng.PodmanSocket(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	if err := templates.RenderAssetsWithSocket(s.cfg, s.dir, s.eng.Name(), socket); err != nil {
 		return fmt.Errorf("rendering assets: %w", err)
 	}
 	running, err := s.eng.RunningServices(ctx, s.dir)

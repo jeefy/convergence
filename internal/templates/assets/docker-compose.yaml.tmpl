@@ -122,11 +122,17 @@ services:
     restart: unless-stopped
     command: []
     user: "0"
+{{- if .OpenShellDisableLabel }}
+    security_opt:
+      - label=disable
+{{- end }}
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.OpenShell }}:17670"
       - "{{ .Config.BindAddress }}:{{ .Ports.OpenShellHealth }}:17671"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: {{ printf "%q" .OpenShellSocket }}
+        target: /var/run/docker.sock
       - openshell-data:/var/lib/openshell
       - ./openshell.toml:/etc/openshell/gateway.toml:ro{{ .VolumeSuffix }}
     environment:

@@ -38,6 +38,8 @@ Podman lifecycle commands use `podman compose`, which delegates to an external p
 
 Before starting the stack, Convergence checks for running services so it does not treat its own published ports as conflicts. Docker uses `compose ps`; Podman uses native `ps` filtered by the rendered Compose file's `com.docker.compose.project.config_files` label and running state, reading service names from the `Labels` map's `com.docker.compose.service` entry. This works on older Podman releases without the `Label` template helper. Both `podman-compose` and Docker Compose set these labels. Failed checks include stderr.
 
+For Linux Podman with netavark, startup checks for an `nft` binary that explicitly reports missing JSON support. Compose startup output is streamed. With OpenShell, startup discovers and checks the Podman API socket, mounts it at `/var/run/docker.sock` in the gateway, and selects OpenShell's Podman driver. On Linux the OpenShell gateway uses `label=disable` to access the socket; other services retain their SELinux settings. The socket grants the gateway control of the user's Podman containers. Docker retains its Docker socket and driver.
+
 ### Ports
 
 All host ports bind to `bind_address` (default `127.0.0.1`).
@@ -64,7 +66,7 @@ The optional copilot-api and OpenShell gateway are Compose services. Their named
 | `docker-compose.yaml` | 0600 | Rendered compose stack, no secrets |
 | `agentgateway.yaml` | 0600 | Rendered gateway config (listeners, ext_proc/ext_authz, backends) |
 | `pinball.yaml` | 0600 | Model catalog and tier assignments, generated from the model mapping |
-| `openshell.toml` | 0644 | Rendered OpenShell gateway config (schema v2, DooD Docker driver, openshell sandbox only) |
+| `openshell.toml` | 0644 | Rendered OpenShell gateway config (schema v2, Docker or Podman driver, openshell sandbox only) |
 | `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
 | `logs/` | 0700 | Gateway access logs |
 
