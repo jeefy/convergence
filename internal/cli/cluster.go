@@ -42,6 +42,7 @@ var clusterInstallCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		imgAGW, _ := cmd.Flags().GetString("image-agentgateway")
 		imgStandIn, _ := cmd.Flags().GetString("image-standin")
+		extProcTimeout, _ := cmd.Flags().GetString("extproc-timeout")
 		imgPinball, _ := cmd.Flags().GetString("image-pinball")
 		imgCopilot, _ := cmd.Flags().GetString("image-copilot-api")
 
@@ -69,6 +70,7 @@ var clusterInstallCmd = &cobra.Command{
 			ImageStandIn:         imgStandIn,
 			ImagePinball:         imgPinball,
 			ImageCopilotAPI:      imgCopilot,
+			ExtProcTimeout:       extProcTimeout,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -181,6 +183,7 @@ func init() {
 	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 	clusterInstallCmd.Flags().String("image-agentgateway", "", "Override agentgateway image (tag or digest)")
+	clusterInstallCmd.Flags().String("extproc-timeout", "", "ext_proc requestTimeout as a Go duration (default 5s)")
 	clusterInstallCmd.Flags().String("image-standin", "", "Override stand-in image (tag or digest)")
 	clusterInstallCmd.Flags().String("image-pinball", "", "Override pinball image (tag or digest)")
 	clusterInstallCmd.Flags().String("image-copilot-api", "", "Override copilot-api image (tag or digest)")

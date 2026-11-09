@@ -97,3 +97,19 @@ func TestKubectlWrappers_succeedWithFakeKubectl(t *testing.T) {
 }
 
 func otelBad() config.OTel { return config.OTel{Endpoint: "x:1", Protocol: "bogus"} }
+
+func TestRenderManifests_extProcTimeout(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct"})
+	if err != nil || !strings.Contains(out, "requestTimeout: 5s") {
+		t.Fatalf("default: err=%v, want requestTimeout: 5s", err)
+	}
+	out, err = RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct", ExtProcTimeout: "60s"})
+	if err != nil || !strings.Contains(out, "requestTimeout: 60s") || strings.Contains(out, "requestTimeout: 5s") {
+		t.Fatalf("override: err=%v", err)
+	}
+	for _, bad := range []string{"abc", "0s", "-5s", "5"} {
+		if _, err := RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct", ExtProcTimeout: bad}); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}

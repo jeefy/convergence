@@ -99,7 +99,7 @@ stringData:
                 requestTrailerMode: send
                 responseTrailerMode: send
               policies:
-                http: {requestTimeout: 5s}
+                http: {requestTimeout: {{ .ExtProcTimeoutValue }}}
     llm:
       policies:
         timeout:
