@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -104,7 +105,41 @@ type Config struct {
 	ImagePinball          string `yaml:"image_pinball,omitempty"`
 	ImageCopilotAPI       string `yaml:"image_copilot_api,omitempty"`
 	ImageOpenShellGateway string `yaml:"image_openshell_gateway,omitempty"`
+
+	// ExtProcTimeout is agentgateway's requestTimeout for the ext_proc
+	// (stand-in) policy: how long it waits for the first gRPC response headers.
+	// Go duration, > 0. Empty = DefaultExtProcTimeout.
+	ExtProcTimeout string `yaml:"extproc_timeout,omitempty"`
 }
+
+// DefaultExtProcTimeout is the ext_proc requestTimeout used when unset.
+const DefaultExtProcTimeout = "5s"
+
+// ExtProcTimeoutOrDefault returns s, or DefaultExtProcTimeout when empty.
+func ExtProcTimeoutOrDefault(s string) string {
+	if s == "" {
+		return DefaultExtProcTimeout
+	}
+	return s
+}
+
+// ValidateExtProcTimeout checks that s (empty allowed) is a positive Go duration.
+func ValidateExtProcTimeout(s string) error {
+	if s == "" {
+		return nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid extproc timeout %q: %w (use a Go duration such as 5s or 1m)", s, err)
+	}
+	if d <= 0 {
+		return fmt.Errorf("invalid extproc timeout %q: must be greater than 0", s)
+	}
+	return nil
+}
+
+// ExtProcTimeoutValue is the effective timeout for templates.
+func (c *Config) ExtProcTimeoutValue() string { return ExtProcTimeoutOrDefault(c.ExtProcTimeout) }
 
 func (c *Config) ValidateComposeProvider() error {
 	switch c.ComposeProvider {
@@ -261,6 +296,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("parsing config %s: %w", path, err)
 	}
 	if err := cfg.ValidateComposeProvider(); err != nil {
+		return nil, fmt.Errorf("validating config %s: %w", path, err)
+	}
+	if err := ValidateExtProcTimeout(cfg.ExtProcTimeout); err != nil {
 		return nil, fmt.Errorf("validating config %s: %w", path, err)
 	}
 	if cfg.StandinSalt == "" {

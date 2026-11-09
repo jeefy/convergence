@@ -43,8 +43,10 @@ type ClusterOptions struct {
 
 	ImageAgentGateway string
 	ImageStandIn      string
-	ImagePinball      string
-	ImageCopilotAPI   string
+	// ExtProcTimeout overrides the ext_proc requestTimeout (default 5s).
+	ExtProcTimeout  string
+	ImagePinball    string
+	ImageCopilotAPI string
 }
 
 // RequestLogEnabled reports whether agentgateway writes the Postgres request log.
@@ -52,6 +54,9 @@ func (o *ClusterOptions) RequestLogEnabled() bool { return o.RequestLogDB != "" 
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
 	if err := opts.OTel.Validate(); err != nil {
+		return "", err
+	}
+	if err := config.ValidateExtProcTimeout(opts.ExtProcTimeout); err != nil {
 		return "", err
 	}
 	switch opts.Provider {
@@ -170,4 +175,9 @@ func DeleteManifests(manifests string) error {
 		return fmt.Errorf("kubectl delete failed: %w (output: %s)", err, string(out))
 	}
 	return nil
+}
+
+// ExtProcTimeoutValue is the effective ext_proc requestTimeout for templates.
+func (o *ClusterOptions) ExtProcTimeoutValue() string {
+	return config.ExtProcTimeoutOrDefault(o.ExtProcTimeout)
 }

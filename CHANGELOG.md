@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `--extproc-timeout` flag for `init` and `cluster install` (config field `extproc_timeout`) to configure the ext_proc `requestTimeout` (default `5s`, unchanged).
+
 ## [0.2.4] - 2026-11-08
 
 ### Changed

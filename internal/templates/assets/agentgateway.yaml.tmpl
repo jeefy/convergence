@@ -57,7 +57,7 @@ gateways:
             requestTrailerMode: send
             responseTrailerMode: send
           policies:
-            http: {requestTimeout: 5s}
+            http: {requestTimeout: {{ .Config.ExtProcTimeoutValue }}}
 
 llm:
   policies:

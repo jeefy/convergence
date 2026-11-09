@@ -121,3 +121,16 @@ func TestPublishedPortsIncludesCopilotOnlyForCopilot(t *testing.T) {
 		t.Fatalf("copilot provider must publish %d, got %+v", CopilotAPIPort, ports)
 	}
 }
+
+func TestValidateExtProcTimeout(t *testing.T) {
+	for _, ok := range []string{"", "5s", "1m30s", "60s"} {
+		if err := ValidateExtProcTimeout(ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"abc", "0s", "-1s", "10"} {
+		if err := ValidateExtProcTimeout(bad); err == nil {
+			t.Errorf("%q must fail", bad)
+		}
+	}
+}

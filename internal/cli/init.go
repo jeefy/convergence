@@ -41,6 +41,7 @@ type initFlags struct {
 
 	imageAGW        string
 	imageStandIn    string
+	extProcTimeout  string
 	imagePinball    string
 	imageCopilotAPI string
 	imageOpenShell  string
@@ -239,6 +240,12 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 	if f.imageAGW != "" {
 		cfg.ImageAgentGateway = f.imageAGW
 	}
+	if f.extProcTimeout != "" {
+		cfg.ExtProcTimeout = f.extProcTimeout
+	}
+	if err := config.ValidateExtProcTimeout(cfg.ExtProcTimeout); err != nil {
+		return err
+	}
 	if f.imageStandIn != "" {
 		cfg.ImageStandIn = f.imageStandIn
 	}
@@ -355,6 +362,7 @@ func init() {
 	f.IntVar(&initOpts.port, "port", 0, "Host port for the gateway (default 3000)")
 	f.StringVar(&initOpts.bindAddress, "bind-address", "", "Host address to publish ports on (default 127.0.0.1; 0.0.0.0 exposes to the network)")
 	f.StringVar(&initOpts.imageAGW, "image-agentgateway", "", "Override agentgateway image (tag or digest)")
+	f.StringVar(&initOpts.extProcTimeout, "extproc-timeout", "", "ext_proc requestTimeout as a Go duration (default 5s)")
 	f.StringVar(&initOpts.imageStandIn, "image-standin", "", "Override stand-in image (tag or digest)")
 	f.StringVar(&initOpts.imagePinball, "image-pinball", "", "Override pinball image (tag or digest)")
 	f.StringVar(&initOpts.imageCopilotAPI, "image-copilot-api", "", "Override copilot-api image (tag or digest)")

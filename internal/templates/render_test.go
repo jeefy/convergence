@@ -431,3 +431,15 @@ func TestPassthroughEndpointRendered(t *testing.T) {
 		t.Error("env plumbing missing")
 	}
 }
+
+func TestExtProcTimeoutRendered(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if !strings.Contains(files["agentgateway.yaml"], "requestTimeout: 5s") {
+		t.Errorf("default must render requestTimeout: 5s")
+	}
+	_, files = render(t, func(c *config.Config) { c.ExtProcTimeout = "60s" })
+	ag := files["agentgateway.yaml"]
+	if !strings.Contains(ag, "requestTimeout: 60s") || strings.Contains(ag, "requestTimeout: 5s") {
+		t.Errorf("override must render requestTimeout: 60s:\n%s", ag)
+	}
+}

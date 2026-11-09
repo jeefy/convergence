@@ -214,7 +214,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 | Command | Description |
 |---|---|
-| `init [--yes] [--provider P] [--engine docker\|podman] [--compose-provider auto\|docker-compose\|podman-compose] [--sandbox S] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--image-openshell IMG]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
+| `init [--yes] [--provider P] [--engine docker\|podman] [--compose-provider auto\|docker-compose\|podman-compose] [--sandbox S] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--ollama-url U] [--ollama-model-light/-standard/-heavy M] [--bind-address A] [--port N] [--fail-open] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--image-openshell IMG] [--extproc-timeout DUR]` | Write `~/.convergence/config.yaml` and render the compose stack. Interactive unless `--yes`. |
 | `login copilot` | GitHub device-flow login; stores the token for the Copilot provider. |
 | `start [--strict]` / `stop` / `restart` / `down` | Manage the local containers. `--strict` fails (instead of warning) when Ollama lacks a mapped model. `down` stops and removes containers and networks. |
 | `prune` | Remove dangling images, stopped containers, and unused networks. |
@@ -227,7 +227,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 | `config list` | List supported clients. |
 | `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
 | `config <client> restore [--force]` | Restore the client's backup. |
-| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--ingress-host HOST] [--enable-pdb] [--request-log-db DSN \| --request-log-postgres] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG]` | Apply manifests to the current kube context. `--dry-run` prints them. |
+| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--ingress-host HOST] [--enable-pdb] [--request-log-db DSN \| --request-log-postgres] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--extproc-timeout DUR]` | Apply manifests to the current kube context. `--dry-run` prints them. |
 | `cluster status [--namespace NS]` | Rollout and pod health. |
 | `cluster logs [-f] [--tail N] [service]` | Stream logs from in-cluster pods. |
 | `cluster uninstall [--namespace NS] [--yes]` | Delete the Convergence resources. |
@@ -238,6 +238,8 @@ Worked examples, using the point values in the Pinball README (they may change w
 | `upgrade` | Pull the image versions pinned by this binary and recreate the stack. |
 | `uninstall [--purge] [--yes]` | Stop and remove the stack. `--purge` also deletes `~/.convergence`. |
 | `version` | Version, commit, build date. |
+
+`--extproc-timeout` (config: `extproc_timeout`, default `5s`) sets agentgateway's `requestTimeout` for the ext_proc policy: the time it waits for the first gRPC response headers from the ext_proc server (see agentgateway#4146). Raise it for very large requests. Must be a positive Go duration (e.g. `60s`).
 
 ## Status and doctor
 
