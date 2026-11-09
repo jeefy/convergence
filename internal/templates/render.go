@@ -48,9 +48,12 @@ type HostPorts struct {
 }
 
 type RenderContext struct {
-	Config *config.Config
-	Images Images
-	Ports  HostPorts
+	Config                *config.Config
+	Images                Images
+	Ports                 HostPorts
+	OpenShellSocket       string
+	OpenShellDriver       string
+	OpenShellDisableLabel bool
 	// Models is the resolved tier/model mapping (internal/models).
 	Models *models.Resolved
 	// VolumeSuffix adds a shared SELinux relabel on Linux so rootless podman
@@ -119,6 +122,11 @@ func newContext(cfg *config.Config, res *models.Resolved) RenderContext {
 // RenderAssets writes the compose stack into targetDir: non-secret files 0644
 // and the secret-bearing .env 0600 (read only by the compose CLI on the host).
 func RenderAssets(cfg *config.Config, targetDir string) error {
+	return RenderAssetsWithSocket(cfg, targetDir, cfg.Engine, "/var/run/docker.sock")
+}
+
+// RenderAssetsWithSocket uses socket as the host-side OpenShell engine socket.
+func RenderAssetsWithSocket(cfg *config.Config, targetDir, engineName, socket string) error {
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return fmt.Errorf("creating target dir: %w", err)
 	}
@@ -135,6 +143,12 @@ func RenderAssets(cfg *config.Config, targetDir string) error {
 		return err
 	}
 	ctx := newContext(cfg, res)
+	ctx.OpenShellSocket = strings.ReplaceAll(socket, "$", "$$")
+	ctx.OpenShellDriver = "docker"
+	if engineName == "podman" {
+		ctx.OpenShellDriver = "podman"
+		ctx.OpenShellDisableLabel = runtime.GOOS == "linux"
+	}
 	filesToRender := append([]string{}, publicFiles...)
 	if cfg.Sandbox == config.SandboxOpenShell {
 		filesToRender = append(filesToRender, "openshell.toml")

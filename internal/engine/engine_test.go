@@ -1,14 +1,18 @@
 package engine
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,6 +28,8 @@ case "$*" in ps\ *|*" ps "*)
   [ -n "$FAKE_WARNING" ] && echo "$FAKE_WARNING" >&2
   for s in $FAKE_RUNNING; do echo "$s"; done
   exit 0;;
+info\ *NetworkBackend*) echo "$FAKE_NETWORK_BACKEND"; exit 0;;
+info\ *RemoteSocket.Path*) echo "$FAKE_SOCKET"; exit 0;;
 esac
 exit 0
 `
@@ -201,12 +207,129 @@ func TestCompose_errorWrapping(t *testing.T) {
 			t.Errorf("%s: cause not wrapped: %v", name, err)
 		}
 	}
-	if err := e.Start(t.Context(), dir); !strings.Contains(err.Error(), "boom") {
-		t.Errorf("output not included: %v", err)
-	}
 	t.Setenv("FAKE_FAIL", "")
 	if _, err := e.RunningServices(t.Context(), dir); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestStartStreamsComposeOutput(t *testing.T) {
+	fakeBins(t, "docker")
+	t.Setenv("FAKE_FAIL", "up -d")
+	e, err := DetectEngine("docker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if err := e.start(t.Context(), t.TempDir(), &stdout, &stderr); err == nil {
+		t.Fatal("expected compose error")
+	}
+	if !strings.Contains(stderr.String(), "boom") {
+		t.Fatalf("compose stderr not streamed: %q", stderr.String())
+	}
+}
+
+func TestStartStreamsBeforeComposeExits(t *testing.T) {
+	bin := fakeBins(t, "docker")
+	if err := os.WriteFile(filepath.Join(bin, "docker"), []byte("#!/bin/sh\necho starting\nexec /bin/sleep 30\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	e, err := DetectEngine("docker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	reader, writer := io.Pipe()
+	defer func() { _ = reader.Close() }()
+	done := make(chan error, 1)
+	go func() {
+		done <- e.start(ctx, t.TempDir(), writer, io.Discard)
+		_ = writer.Close()
+	}()
+	line := make(chan string, 1)
+	go func() {
+		s, _ := bufio.NewReader(reader).ReadString('\n')
+		line <- s
+	}()
+	select {
+	case got := <-line:
+		if got != "starting\n" {
+			t.Errorf("streamed output = %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("startup output was not streamed before process exit")
+	}
+	cancel()
+	<-done
+}
+
+func TestCheckPodmanNft(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("netavark nft check is Linux-only")
+	}
+	for _, tc := range []struct {
+		name, engine, backend, output string
+		wantErr                       bool
+	}{
+		{"missing JSON", "podman", "netavark", "Error: JSON support not compiled-in", true},
+		{"permission error", "podman", "netavark", "Operation not permitted", false},
+		{"other backend", "podman", "cni", "Error: JSON support not compiled-in", false},
+		{"docker", "docker", "netavark", "Error: JSON support not compiled-in", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bin := fakeBins(t, tc.engine)
+			if err := os.WriteFile(filepath.Join(bin, "nft"), []byte("#!/bin/sh\necho \"$FAKE_NFT_OUTPUT\" >&2\nexit 1\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("FAKE_NETWORK_BACKEND", tc.backend)
+			t.Setenv("FAKE_NFT_OUTPUT", tc.output)
+			e, err := DetectEngine(tc.engine)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = e.CheckPodmanNft(t.Context())
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("got %v, want error %v", err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "JSON support not compiled-in") {
+				t.Fatalf("missing diagnostic: %v", err)
+			}
+		})
+	}
+}
+
+func TestPodmanSocket(t *testing.T) {
+	fakeBins(t, "podman")
+	e, err := DetectEngine("podman")
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(t.TempDir(), "podman.sock")
+	ln, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	t.Setenv("FAKE_SOCKET", socket)
+	got, err := e.PodmanSocket(t.Context())
+	if err != nil || got != socket {
+		t.Fatalf("got %q, %v; want %q", got, err, socket)
+	}
+	t.Setenv("FAKE_SOCKET", filepath.Join(t.TempDir(), "missing.sock"))
+	if _, err := e.PodmanSocket(t.Context()); err == nil || !strings.Contains(err.Error(), "podman.socket") {
+		t.Fatalf("expected socket setup hint, got %v", err)
+	}
+	file, err := os.CreateTemp(t.TempDir(), "not-socket")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAKE_SOCKET", file.Name())
+	if _, err := e.PodmanSocket(t.Context()); err == nil || !strings.Contains(err.Error(), "not a socket") {
+		t.Fatalf("expected non-socket error, got %v", err)
 	}
 }
 

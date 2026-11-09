@@ -91,7 +91,7 @@ convergence start
 convergence sandbox run opencode
 ```
 
-For the bundled OpenShell gateway, use `--sandbox openshell` with any provider, including Copilot.
+For the bundled OpenShell gateway, use `--sandbox openshell` with any provider, including Copilot. With Podman, enable its API socket first (`systemctl --user enable --now podman.socket` on rootless Linux). Convergence mounts the discovered socket and selects OpenShell's Podman driver. On Linux, SELinux labeling is disabled for the OpenShell gateway container so it can access the socket; access to the socket grants control over the user's Podman containers.
 
 ### Kubernetes
 
@@ -332,11 +332,11 @@ Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 **Port already in use.** Another process has `3000` (or `4141`, `9102`, `9201`, `15020`). Find it with `ss -ltnp | grep 3000` (Linux) or `lsof -i :3000` (macOS). Re-run `convergence init --port 3100` for the gateway; the other ports are fixed.
 
-**Podman rootless errors.** Check that `podman info` works first. If using Docker Compose, enable Podman's user API socket (`systemctl --user enable --now podman.socket`). `podman-compose` does not require that socket; select it with `convergence init --engine podman --compose-provider podman-compose`. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
+**Podman rootless errors.** Check that `podman info` works first. If using Docker Compose or OpenShell, enable Podman's user API socket (`systemctl --user enable --now podman.socket`). `podman-compose` itself does not require that socket; select it with `convergence init --engine podman --compose-provider podman-compose`. SELinux denials on mounted config files are handled with the shared `z` volume label on Linux; if you edited the compose file by hand, re-run `convergence init`.
 
 **Podman reports `nft` JSON support is not compiled in.** Netavark needs an `nft` binary with JSON support. On Linux, a Homebrew `nftables` installation may take precedence over the system binary without providing that support. Check `command -v nft`; if it points to Homebrew and a suitable system `nft` is installed, run `brew unlink nftables`, verify that `command -v nft` selects the system binary, and retry `convergence start`. Unlinking leaves the Homebrew package installed; `brew link nftables` restores its links. Unlinking can also affect other applications that use Homebrew's `nft`.
 
-**OpenShell reports `/var/run/docker.sock` is missing.** The bundled OpenShell service mounts that exact host path, even when using Podman and `podman-compose`. Rootless Podman's socket is typically under `/run/user/<uid>/podman/podman.sock`, so enabling `podman.socket` alone does not provide the required path. OpenShell needs a Docker-compatible socket available at `/var/run/docker.sock`; otherwise, initialize without the OpenShell sandbox. Other services may already be running after this error.
+**OpenShell cannot connect to the Podman API socket.** Check `podman info --format '{{.Host.RemoteSocket.Path}}'` and enable the local Podman socket. Convergence checks and mounts that path when starting OpenShell; a remote socket path must also be accessible to the local Compose engine.
 
 **Podman label-template errors.** If `start` reports `can't evaluate field Label`, upgrade Convergence. Running-service checks now use Podman's `Labels` map, which also works on older distro releases.
 

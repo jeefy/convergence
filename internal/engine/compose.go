@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -87,7 +89,69 @@ func (e *ComposeEngine) runCompose(ctx context.Context, dir string, args ...stri
 }
 
 func (e *ComposeEngine) Start(ctx context.Context, dir string) error {
-	return e.runCompose(ctx, dir, "up", "-d")
+	return e.start(ctx, dir, os.Stdout, os.Stderr)
+}
+
+func (e *ComposeEngine) start(ctx context.Context, dir string, stdout, stderr io.Writer) error {
+	cmd := e.composeCmd(ctx, dir, "up", "-d")
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s compose up -d failed: %w", e.Name(), err)
+	}
+	return nil
+}
+
+// CheckPodmanNft detects the specific netavark failure before Compose starts.
+func (e *ComposeEngine) CheckPodmanNft(ctx context.Context) error {
+	if e.Name() != "podman" || runtime.GOOS != "linux" {
+		return nil
+	}
+	nft, err := exec.LookPath("nft")
+	if err != nil {
+		return nil
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	backend, err := exec.CommandContext(checkCtx, e.binary, "info", "--format", "{{.Host.NetworkBackend}}").Output()
+	if err != nil || strings.TrimSpace(string(backend)) != "netavark" {
+		return ctx.Err()
+	}
+	out, _ := exec.CommandContext(checkCtx, nft, "-j", "list", "ruleset").CombinedOutput()
+	if strings.Contains(string(out), "JSON support not compiled-in") {
+		return fmt.Errorf("podman netavark cannot use %s: nft JSON support not compiled-in; install or select an nft binary with JSON support (for Homebrew, see README troubleshooting)", nft)
+	}
+	return ctx.Err()
+}
+
+// PodmanSocket locates the local Podman API socket for OpenShell.
+func (e *ComposeEngine) PodmanSocket(ctx context.Context) (string, error) {
+	out, err := exec.CommandContext(ctx, e.binary, "info", "--format", "{{.Host.RemoteSocket.Path}}").Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("finding Podman API socket: %w (stderr: %s)", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", fmt.Errorf("finding Podman API socket: %w", err)
+	}
+	path := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("invalid Podman API socket path %q", path)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("podman API socket %s is unavailable: %w; enable the Podman API socket (for example, systemctl --user enable --now podman.socket)", path, err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return "", fmt.Errorf("podman API socket %s is not a socket", path)
+	}
+	conn, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "unix", path)
+	if err != nil {
+		return "", fmt.Errorf("connecting to Podman API socket %s: %w; check that podman.socket is active", path, err)
+	}
+	if err := conn.Close(); err != nil {
+		return "", fmt.Errorf("closing Podman API socket connection: %w", err)
+	}
+	return path, nil
 }
 
 func (e *ComposeEngine) Stop(ctx context.Context, dir string) error {

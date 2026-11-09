@@ -7,14 +7,16 @@ bind_address = "0.0.0.0:17670"
 health_bind_address = "0.0.0.0:17671"
 log_level = "info"
 disable_tls = true
-compute_driver = "docker"
+compute_driver = "{{ .OpenShellDriver }}"
 
 [openshell.gateway.auth]
 allow_unauthenticated_users = true
 
-[openshell.drivers.docker]
+[openshell.drivers.{{ .OpenShellDriver }}]
 socket_path = "/var/run/docker.sock"
 default_image = "ghcr.io/nvidia/openshell-community/sandboxes/base:latest"
 supervisor_image = "ghcr.io/nvidia/openshell/supervisor:latest"
 image_pull_policy = "if_not_present"
+{{- if eq .OpenShellDriver "docker" }}
 sandbox_label = "openshell"
+{{- end }}
