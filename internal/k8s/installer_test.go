@@ -508,3 +508,13 @@ func TestModelsFilePassthroughEndpoint(t *testing.T) {
 		t.Error("want error for ollama without base_url")
 	}
 }
+
+func TestManifestsCopilotProviderOverride(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "providerOverride: copilot") || strings.Contains(out, "providerOverride: openai") {
+		t.Errorf("copilot-completions must use providerOverride: copilot (cost catalog key)")
+	}
+}

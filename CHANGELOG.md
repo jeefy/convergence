@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Empty `request_logs.cost`: the `copilot-completions` provider used `providerOverride: openai`, so agentgateway looked pricing up under `openai/claude-*` (no match). It now uses the `copilot` catalog key.
 - OpenShell on Podman: discover and mount the Podman API socket and select OpenShell's Podman driver. On Linux, the OpenShell gateway disables SELinux labeling to access the socket.
 - Podman startup: detect `nft` builds without JSON support before Compose starts and stream Compose startup output.
 

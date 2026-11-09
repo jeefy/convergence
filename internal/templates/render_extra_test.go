@@ -146,3 +146,12 @@ func TestComposeStandInStopGracePeriodExceedsDrain(t *testing.T) {
 		t.Errorf("stand-in needs stop_grace_period above its 10s drain:\n%s", files[ComposeFile])
 	}
 }
+
+// The copilot provider must resolve costs under the "copilot" catalog key;
+// "openai" has no claude-*/gemini-* entries, which leaves request_logs.cost empty.
+func TestCopilotProviderOverrideUsesCopilotCatalog(t *testing.T) {
+	_, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	if !strings.Contains(files["agentgateway.yaml"], "providerOverride: copilot") {
+		t.Errorf("copilot provider must set providerOverride: copilot")
+	}
+}
