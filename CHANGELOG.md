@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `cluster install --standin-cpu-request` / `--standin-cpu-limit` set Stand-In's CPU (defaults `50m` / `500m`, unchanged). Raise the limit if ext_proc times out on large request bodies.
+- agentgateway now records `pinball.score` and `pinball.est_tokens` from Pinball's `/check` in the access/request log (compose and Kubernetes), so routing thresholds can be tuned from real traffic.
+
 ## [0.2.5] - 2026-11-09
 
 ### Changed

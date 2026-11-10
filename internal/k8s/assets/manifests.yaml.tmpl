@@ -82,6 +82,7 @@ stringData:
           pinball.tier: 'default(extauthz.tier, "")'
           pinball.model: 'default(extauthz.model, "")'
           pinball.reason: 'default(extauthz.reason, "")'
+          pinball.score: 'default(string(extauthz.score), "")'
 {{- end }}
     gateways:
       default:
