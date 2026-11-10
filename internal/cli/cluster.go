@@ -87,6 +87,12 @@ var clusterInstallCmd = &cobra.Command{
 			return nil
 		}
 
+		if noBackup, _ := cmd.Flags().GetBool("no-backup"); !noBackup {
+			if err := autoBackup(ns); err != nil {
+				return err
+			}
+		}
+
 		fmt.Printf("Applying Convergence manifests to namespace '%s'...\n", ns)
 		if err := k8s.ApplyManifests(manifests); err != nil {
 			return err
