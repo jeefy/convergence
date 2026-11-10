@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.5] - 2026-11-09
+
+### Changed
+
+- Bump pinned Stand-In image to `0.6.2` (`ghcr.io/jeefy/stand-in:0.6.2@sha256:846044102ae1990e924bf43f345addaaa63a5a387c12ad26cb0393f98716d414`).
+- Bump pinned Pinball image to `0.7.6` (`ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee`).
 
 ### Added
 
