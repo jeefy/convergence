@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"embed"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -164,6 +165,37 @@ func DeleteNamespace(ns string) error {
 		return fmt.Errorf("kubectl delete namespace failed: %w (output: %s)", err, string(out))
 	}
 	return nil
+}
+
+// ExistingSecretValue returns the decoded value of key in Secret name/ns, or
+// "" when the Secret, the key or the cluster is unavailable. It lets a
+// re-install keep generated or user-provided secrets instead of replacing them.
+func ExistingSecretValue(ns, name, key string) string {
+	out, err := exec.Command("kubectl", "-n", ns, "get", "secret", name, "-o", "jsonpath={.data."+strings.ReplaceAll(key, ".", "\\.")+"}").Output()
+	if err != nil {
+		return ""
+	}
+	dec, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))
+	if err != nil {
+		return ""
+	}
+	return string(dec)
+}
+
+// ReuseExistingSecrets fills unset secret fields of opts from the Secrets a
+// previous install created in opts.Namespace, so that re-running install does
+// not rotate the Stand-In salt, drop the Copilot token or change the
+// request-log Postgres password that the existing PVC still expects.
+func ReuseExistingSecrets(opts *ClusterOptions) {
+	if opts.StandinSalt == "" {
+		opts.StandinSalt = ExistingSecretValue(opts.Namespace, "stand-in", "salt")
+	}
+	if opts.Provider == "copilot" && opts.CopilotToken == "" {
+		opts.CopilotToken = ExistingSecretValue(opts.Namespace, "convergence-copilot", "GH_COPILOT_TOKEN")
+	}
+	if opts.RequestLogPostgres && opts.RequestLogPGPassword == "" {
+		opts.RequestLogPGPassword = ExistingSecretValue(opts.Namespace, "pinball-optimizer-db", "password")
+	}
 }
 
 func ApplyManifests(manifests string) error {

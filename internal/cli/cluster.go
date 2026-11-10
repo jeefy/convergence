@@ -77,6 +77,11 @@ var clusterInstallCmd = &cobra.Command{
 			StandinCPULimit:      standinCPULimit,
 		}
 
+		k8s.ReuseExistingSecrets(opts)
+		if prov == "copilot" && opts.CopilotToken == "" {
+			return fmt.Errorf("--provider copilot needs --copilot-token (no existing convergence-copilot Secret in namespace %q to reuse)", ns)
+		}
+
 		manifests, err := k8s.RenderManifests(opts)
 		if err != nil {
 			return err
@@ -182,7 +187,7 @@ func init() {
 	clusterInstallCmd.Flags().Float64("otel-sample", 0, "Trace sampling rate 0..1 (default 1)")
 	clusterInstallCmd.Flags().String("request-log-db", "", "Postgres DSN for agentgateway's request log (llm: full, STORES PROMPTS after Stand-In scrubbing); also enables the optimizer CronJob. Stored in Secret pinball-optimizer-db")
 	clusterInstallCmd.Flags().Bool("request-log-postgres", false, "Run a small Postgres (StatefulSet, 5Gi PVC) in the namespace as the request log; same effect as --request-log-db")
-	clusterInstallCmd.Flags().String("request-log-postgres-password", "", "Password for --request-log-postgres (default: generated; pass the existing one when re-installing, the PVC keeps the first)")
+	clusterInstallCmd.Flags().String("request-log-postgres-password", "", "Password for --request-log-postgres (default: reuse the existing Secret, else generate)")
 	clusterInstallCmd.Flags().Bool("fail-open", false, "If Stand-In is down, let requests through anyway: they then go UNSCRUBBED to the upstream (default: fail closed, reject them)")
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")

@@ -538,3 +538,42 @@ func TestManifestsCopilotProviderOverride(t *testing.T) {
 		t.Errorf("copilot-completions must use providerOverride: copilot (cost catalog key)")
 	}
 }
+
+func TestReuseExistingSecrets(t *testing.T) {
+	bin := t.TempDir()
+	// Fake kubectl: answers "get secret <name>" with a base64 value per name, fails for unknown.
+	script := `#!/bin/sh
+case "$*" in
+  *"secret stand-in"*) printf 'b2xkLXNhbHQ=' ;;
+  *"secret convergence-copilot"*) printf 'Z2hwX29sZA==' ;;
+  *) echo "not found" >&2; exit 1 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "kubectl"), []byte(script), 0o700); err != nil { //nolint:gosec // test executable
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	opts := &ClusterOptions{Namespace: "n", Provider: "copilot", RequestLogPostgres: true}
+	ReuseExistingSecrets(opts)
+	if opts.StandinSalt != "old-salt" || opts.CopilotToken != "ghp_old" {
+		t.Fatalf("existing secrets not reused: salt=%q token=%q", opts.StandinSalt, opts.CopilotToken)
+	}
+	if opts.RequestLogPGPassword != "" {
+		t.Fatalf("missing secret must stay empty, got %q", opts.RequestLogPGPassword)
+	}
+
+	// Explicit values win over existing Secrets.
+	opts = &ClusterOptions{Namespace: "n", Provider: "copilot", StandinSalt: "new", CopilotToken: "ghp_new"}
+	ReuseExistingSecrets(opts)
+	if opts.StandinSalt != "new" || opts.CopilotToken != "ghp_new" {
+		t.Fatalf("explicit values overwritten: salt=%q token=%q", opts.StandinSalt, opts.CopilotToken)
+	}
+
+	// Direct provider never asks for the Copilot token.
+	opts = &ClusterOptions{Namespace: "n", Provider: "direct"}
+	ReuseExistingSecrets(opts)
+	if opts.CopilotToken != "" {
+		t.Fatal("direct provider must not pick up a Copilot token")
+	}
+}

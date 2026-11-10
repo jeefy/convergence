@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -125,6 +126,15 @@ func TestCluster_commandsWithFakeKubectl(t *testing.T) {
 	}
 	b, _ := os.ReadFile(log)
 	mustContain(t, string(b), "apply -f -", "delete namespace", "get pods", "app=pinball", "--tail=5")
+}
+
+func TestCluster_installCopilotNeedsToken(t *testing.T) {
+	writeFakeKubectl(t, "1") // no existing Secret to reuse
+	resetFlags(rootCmd)
+	err := runCLI(t, "cluster", "install", "--provider", "copilot", "--dry-run")
+	if err == nil || !strings.Contains(err.Error(), "--copilot-token") {
+		t.Fatalf("expected missing-token error, got %v", err)
+	}
 }
 
 func TestCluster_kubectlFailures(t *testing.T) {

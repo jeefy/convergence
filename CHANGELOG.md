@@ -2,11 +2,15 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.1] - 2026-11-10
 
 ### Added
 
 - `cluster backup --out DIR` and `cluster restore --from FILE [--yes]` for the request-log Postgres (and pinball overlay). `cluster install` backs up an existing request-log Postgres first (last 5 kept in `~/.convergence/backups/`, `--no-backup` skips).
+
+### Fixed
+
+- `cluster install` re-runs no longer rotate the Stand-In salt, replace `GH_COPILOT_TOKEN` with an empty value or generate a new request-log Postgres password: omitted secrets are read back from the Secrets of the previous install (`stand-in`, `convergence-copilot`, `pinball-optimizer-db`). `--provider copilot` now fails early when no token is given and none exists in the cluster.
 
 ## [0.3.0] - 2026-11-10
 
@@ -171,7 +175,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/jeefy/convergence/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jeefy/convergence/compare/v0.2.5...v0.3.0
 [0.2.2]: https://github.com/jeefy/convergence/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jeefy/convergence/compare/v0.2.0...v0.2.1
