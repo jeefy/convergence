@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-10
 
 ### Added
 
@@ -165,7 +165,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jeefy/convergence/compare/v0.2.5...v0.3.0
 [0.2.2]: https://github.com/jeefy/convergence/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jeefy/convergence/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jeefy/convergence/compare/v0.1.4...v0.2.0
