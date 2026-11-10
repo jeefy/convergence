@@ -84,6 +84,31 @@ var clients = []client{
 		note:    "Models: convergence/auto, convergence/pinball, convergence/light, convergence/standard, convergence/heavy. Default model untouched unless --set-default.",
 	},
 	{
+		name:   "openclaw",
+		format: JSON,
+		path:   func(h string) string { return filepath.Join(h, ".openclaw", "openclaw.json") },
+		ops: func(o Options, root string) []setOp {
+			ops := []setOp{{path: []string{"models", "providers", Key}, val: map[string]any{
+				"baseUrl": root + "/v1",
+				"apiKey":  Key,
+				"api":     "openai-completions",
+				"models": []any{
+					map[string]any{"id": "auto", "name": "Convergence Auto"},
+					map[string]any{"id": "light", "name": "Convergence Light"},
+					map[string]any{"id": "standard", "name": "Convergence Standard"},
+					map[string]any{"id": "heavy", "name": "Convergence Heavy"},
+				},
+			}}}
+			if o.SetDefault {
+				ops = append(ops, setOp{path: []string{"agents", "defaults", "model", "primary"}, val: Key + "/auto"})
+			}
+			return ops
+		},
+		pointed: func(d map[string]any) bool { _, ok := lookup(d, "models", "providers", Key); return ok },
+		// shortcut: strict JSON/JSONC only, an openclaw.json using JSON5 syntax (unquoted keys, single quotes) is rejected, not rewritten.
+		note: "Models: convergence/auto, convergence/light, convergence/standard, convergence/heavy. Default model untouched unless --set-default. openclaw.json must be JSON/JSONC (no unquoted keys or single quotes).",
+	},
+	{
 		name:   "claude-code",
 		format: JSON,
 		path:   func(h string) string { return filepath.Join(h, ".claude", "settings.json") },
