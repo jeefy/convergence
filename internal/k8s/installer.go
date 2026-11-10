@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"text/template"
 
@@ -47,6 +48,9 @@ type ClusterOptions struct {
 	ExtProcTimeout  string
 	ImagePinball    string
 	ImageCopilotAPI string
+	// StandinCPURequest/Limit override Stand-In's CPU (defaults 50m/500m).
+	StandinCPURequest string
+	StandinCPULimit   string
 }
 
 // RequestLogEnabled reports whether agentgateway writes the Postgres request log.
@@ -58,6 +62,11 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	}
 	if err := config.ValidateExtProcTimeout(opts.ExtProcTimeout); err != nil {
 		return "", err
+	}
+	for _, q := range []string{opts.StandinCPURequest, opts.StandinCPULimit} {
+		if q != "" && !cpuQuantity.MatchString(q) {
+			return "", fmt.Errorf("invalid stand-in CPU quantity %q (want e.g. 200m or 2)", q)
+		}
 	}
 	switch opts.Provider {
 	case "copilot", "direct":
@@ -180,4 +189,22 @@ func DeleteManifests(manifests string) error {
 // ExtProcTimeoutValue is the effective ext_proc requestTimeout for templates.
 func (o *ClusterOptions) ExtProcTimeoutValue() string {
 	return config.ExtProcTimeoutOrDefault(o.ExtProcTimeout)
+}
+
+// cpuQuantity matches Kubernetes CPU quantities: whole/decimal cores or millicores.
+var cpuQuantity = regexp.MustCompile(`^([0-9]+(\.[0-9]+)?|[0-9]+m)$`)
+
+// StandinCPURequestValue is Stand-In's effective CPU request for templates.
+func (o *ClusterOptions) StandinCPURequestValue() string {
+	return orDefault(o.StandinCPURequest, "50m")
+}
+
+// StandinCPULimitValue is Stand-In's effective CPU limit for templates.
+func (o *ClusterOptions) StandinCPULimitValue() string { return orDefault(o.StandinCPULimit, "500m") }
+
+func orDefault(s, d string) string {
+	if s == "" {
+		return d
+	}
+	return s
 }

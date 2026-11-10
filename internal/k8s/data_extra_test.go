@@ -113,3 +113,24 @@ func TestRenderManifests_extProcTimeout(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderManifests_standinCPUAndScoreLog(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct"})
+	if err != nil || !strings.Contains(out, "limits: {cpu: 500m, memory: 512Mi}") {
+		t.Fatalf("default: err=%v", err)
+	}
+	for _, want := range []string{"pinball.score: 'default(extauthz.score, null)'", "est_tokens: 'json(response.body).est_tokens'"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	out, err = RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct", StandinCPURequest: "200m", StandinCPULimit: "6"})
+	if err != nil || !strings.Contains(out, "requests: {cpu: 200m, memory: 128Mi}") || !strings.Contains(out, "limits: {cpu: 6, memory: 512Mi}") {
+		t.Fatalf("override: err=%v", err)
+	}
+	for _, bad := range []string{"abc", "-1", "1Gi", "6 "} {
+		if _, err := RenderManifests(&ClusterOptions{Namespace: "n", Provider: "direct", StandinCPULimit: bad}); err == nil {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}
