@@ -241,6 +241,8 @@ Worked examples, using the point values in the Pinball README (they may change w
 
 `--extproc-timeout` (config: `extproc_timeout`, default `5s`) sets agentgateway's `requestTimeout` for the ext_proc policy: the time it waits for the first gRPC response headers from the ext_proc server (see agentgateway#4146). Raise it for very large requests. Must be a positive Go duration (e.g. `60s`).
 
+`cluster install --standin-cpu-request` / `--standin-cpu-limit` (default `50m` / `500m`) set Stand-In's CPU. Stand-In is CPU-bound on large bodies; if ext_proc times out under load, raise the limit (e.g. `--standin-cpu-limit 4`) before raising `--extproc-timeout`.
+
 ## Status and doctor
 
 `convergence status` probes each service (container state plus a health check; agentgateway is probed over its port because its image has no shell). It exits non-zero if any required service is down, and `--json` gives machine-readable output. If Stand-In is down, or the stack is fail-open, it prints a loud warning that secret scrubbing is not active (or that requests would pass unscrubbed).
@@ -299,7 +301,7 @@ otel:
   sample: 1                  # 0..1, default 1
 ```
 
-Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request/response model, input/output tokens) plus `caller` (from the `x-agw-caller` request header) and `pinball.tier`, `pinball.model`, `pinball.reason` for `model: auto` requests. Traces carry metadata only, never prompts or completions. Note that agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`; a proxy in its environment can break OTLP delivery. From a container, use `host.docker.internal:4317` to reach a collector on the host.
+Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request/response model, input/output tokens) plus `caller` (from the `x-agw-caller` request header) and `pinball.tier`, `pinball.model`, `pinball.reason`, `pinball.score` for `model: auto` requests. Traces carry metadata only, never prompts or completions. Note that agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`; a proxy in its environment can break OTLP delivery. From a container, use `host.docker.internal:4317` to reach a collector on the host.
 
 ## Security model
 

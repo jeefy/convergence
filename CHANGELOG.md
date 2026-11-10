@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `cluster install --standin-cpu-request` / `--standin-cpu-limit` set Stand-In's CPU (defaults `50m` / `500m`, unchanged). Raise the limit if ext_proc times out on large request bodies.
+- agentgateway now records `pinball.score` and `pinball.est_tokens` from Pinball's `/check` in the access/request log (compose and Kubernetes), so routing thresholds can be tuned from real traffic.
+
 ### Fixed
 
 - Pinball optimizer could never replay candidates: it sends them as `opt-<pinball model>` (`PINBALL_OPT_MODEL_PREFIX`), but only the internal `pinball-<model>` aliases were rendered, so every candidate call was a 404. The gateway config (local and cluster) now renders public `opt-` twins when the request log is configured. The CronJob and `convergence optimize` also set `PINBALL_OPT_JUDGES=heavy`; pinball's default judges (`judge-opus`, `judge-argon`) are aliases Convergence never renders.

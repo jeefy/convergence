@@ -63,6 +63,8 @@ stringData:
           pinball.model: 'default(extauthz.model, null)'
           pinball.tier: 'default(extauthz.tier, null)'
           pinball.reason: 'default(extauthz.reason, null)'
+          pinball.score: 'default(extauthz.score, null)'
+          pinball.est_tokens: 'default(extauthz.est_tokens, null)'
 {{- if .RequestLogEnabled }}
         # full stores prompts and completions (after Stand-In scrubbing); the optimizer replays them.
         database:
@@ -80,6 +82,7 @@ stringData:
           pinball.tier: 'default(extauthz.tier, "")'
           pinball.model: 'default(extauthz.model, "")'
           pinball.reason: 'default(extauthz.reason, "")'
+          pinball.score: 'default(string(extauthz.score), "")'
 {{- end }}
     gateways:
       default:
@@ -128,6 +131,8 @@ stringData:
                     model: 'json(response.body).model'
                     tier: 'json(response.body).tier'
                     reason: 'json(response.body).reason'
+                    score: 'json(response.body).score'
+                    est_tokens: 'json(response.body).est_tokens'
       providers:
 {{- if eq .Provider "copilot" }}
         - name: copilot-completions
@@ -385,8 +390,8 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 10
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
-            limits: {cpu: 500m, memory: 512Mi}
+            requests: {cpu: {{ .StandinCPURequestValue }}, memory: 128Mi}
+            limits: {cpu: {{ .StandinCPULimitValue }}, memory: 512Mi}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: {drop: ["ALL"]}

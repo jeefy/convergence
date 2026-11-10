@@ -19,6 +19,8 @@ frontendPolicies:
       pinball.model: 'default(extauthz.model, null)'
       pinball.tier: 'default(extauthz.tier, null)'
       pinball.reason: 'default(extauthz.reason, null)'
+      pinball.score: 'default(extauthz.score, null)'
+      pinball.est_tokens: 'default(extauthz.est_tokens, null)'
 {{- if .Config.RequestLogDB }}
     # full stores prompts and completions (after Stand-In scrubbing); the
     # optimizer replays them.
@@ -37,6 +39,7 @@ frontendPolicies:
       pinball.tier: 'default(extauthz.tier, "")'
       pinball.model: 'default(extauthz.model, "")'
       pinball.reason: 'default(extauthz.reason, "")'
+      pinball.score: 'default(string(extauthz.score), "")'
 {{- end }}
 
 gateways:
@@ -88,6 +91,8 @@ llm:
                 model: 'json(response.body).model'
                 tier: 'json(response.body).tier'
                 reason: 'json(response.body).reason'
+                score: 'json(response.body).score'
+                est_tokens: 'json(response.body).est_tokens'
 
   providers:
 {{- if or (eq .Config.Provider "copilot") (.Models.UsesFamily "copilot") }}

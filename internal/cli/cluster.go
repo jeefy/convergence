@@ -43,6 +43,8 @@ var clusterInstallCmd = &cobra.Command{
 		imgAGW, _ := cmd.Flags().GetString("image-agentgateway")
 		imgStandIn, _ := cmd.Flags().GetString("image-standin")
 		extProcTimeout, _ := cmd.Flags().GetString("extproc-timeout")
+		standinCPURequest, _ := cmd.Flags().GetString("standin-cpu-request")
+		standinCPULimit, _ := cmd.Flags().GetString("standin-cpu-limit")
 		imgPinball, _ := cmd.Flags().GetString("image-pinball")
 		imgCopilot, _ := cmd.Flags().GetString("image-copilot-api")
 
@@ -71,6 +73,8 @@ var clusterInstallCmd = &cobra.Command{
 			ImagePinball:         imgPinball,
 			ImageCopilotAPI:      imgCopilot,
 			ExtProcTimeout:       extProcTimeout,
+			StandinCPURequest:    standinCPURequest,
+			StandinCPULimit:      standinCPULimit,
 		}
 
 		manifests, err := k8s.RenderManifests(opts)
@@ -184,6 +188,8 @@ func init() {
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 	clusterInstallCmd.Flags().String("image-agentgateway", "", "Override agentgateway image (tag or digest)")
 	clusterInstallCmd.Flags().String("extproc-timeout", "", "ext_proc requestTimeout as a Go duration (default 5s)")
+	clusterInstallCmd.Flags().String("standin-cpu-request", "", "Stand-In CPU request (default 50m)")
+	clusterInstallCmd.Flags().String("standin-cpu-limit", "", "Stand-In CPU limit (default 500m); raise if ext_proc times out under load")
 	clusterInstallCmd.Flags().String("image-standin", "", "Override stand-in image (tag or digest)")
 	clusterInstallCmd.Flags().String("image-pinball", "", "Override pinball image (tag or digest)")
 	clusterInstallCmd.Flags().String("image-copilot-api", "", "Override copilot-api image (tag or digest)")
