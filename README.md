@@ -144,6 +144,17 @@ ollama:
 
 Only `copilot`, `direct` and `ollama` are valid provider keys, and only the three pinball model names above are valid. An invalid file is an error. Re-run `convergence restart` after editing. For Ollama you can instead set tiers at init with `--ollama-model-light`, `--ollama-model-standard` and `--ollama-model-heavy`; `models.yaml` wins over those flags. In cluster mode pass the same file with `cluster install --models-file models.yaml`.
 
+#### Hybrid: local light tier
+
+Short, simple prompts (titles, one-line questions) are routed to the light tier. You can keep the heavier tiers on your cloud provider and serve only the light tier from a local Ollama model, which costs nothing per request. Use an `ollama:` prefix, which is accepted for `copilot` and `direct` as well:
+
+```yaml
+copilot:
+  claude-haiku-5.5: ollama:gemma4:26b   # light tier runs locally
+```
+
+Set `ollama_url` in `~/.convergence/config.yaml` (default `http://host.docker.internal:11434`), pull the model (`ollama pull gemma4:26b`) and run `convergence restart`. A model in the `gemma4:26b` class has been a good fit for titles and short answers; a 7b-class model is faster but noticeably weaker. Trade-offs: local latency depends on your hardware (the first request after idle loads the model), and quality is below the hosted light model, so keep the standard and heavy tiers on the cloud. `convergence doctor` warns when a model mapped to Ollama is not installed on the endpoint. Check routing with a short request and `model: auto`: the `x-pinball-tier: light` and `x-pinball-model` response headers show where it went.
+
 #### Passthrough models
 
 To call a fixed model by name (no Pinball routing), add a `passthrough:` block. The client uses the key as the model name; Stand-In still scrubs the request and the `x-pinball-*` response headers stay empty.

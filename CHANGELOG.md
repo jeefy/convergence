@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `convergence doctor` warns when a model that `models.yaml` maps to Ollama is not installed on the configured endpoint. README documents mapping the light tier to a local Ollama model.
+
 ## [0.3.1] - 2026-11-10
 
 ### Added
