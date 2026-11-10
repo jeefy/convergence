@@ -199,6 +199,15 @@ stringData:
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
 {{- end }}
+{{- if .OptimizerDSN }}
+        # Public twins of the internal pinball-<id> models for the optimizer's
+        # candidate replays (CronJob sets PINBALL_OPT_MODEL_PREFIX=opt-).
+{{- range .Entries }}
+        - name: opt-{{ .Name }}
+          provider: {reference: {{ .Ref }}}
+          params: {model: {{ .Upstream }}}
+{{- end }}
+{{- end }}
 {{- range .Passthrough }}
         - name: {{ .Name }}
           provider: {reference: {{ .Ref }}}
@@ -658,6 +667,10 @@ spec:
                   value: "http://agentgateway.{{ .Namespace }}.svc.cluster.local:3000"
                 - name: PINBALL_OPT_MODEL_PREFIX
                   value: "opt-"
+                # pinball's default judges are aliases this install does not
+                # render; judge with the heavy-tier model instead.
+                - name: PINBALL_OPT_JUDGES
+                  value: "heavy"
                 - name: PINBALL_OPT_BUDGET_USD
                   value: "10.0"
               resources:

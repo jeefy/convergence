@@ -228,6 +228,26 @@ func TestNoHardcodedModelNamesAndMappingSync(t *testing.T) {
 	}
 }
 
+func TestOptimizerModelTwins(t *testing.T) {
+	out, _ := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if strings.Contains(out, "name: opt-") {
+		t.Error("opt- twins must not render without the optimizer")
+	}
+	const dsn = "postgres://u:pw@db:5432/ag" //nolint:gosec // fake DSN fixture
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", RequestLogDB: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5"} {
+		if !strings.Contains(out, "- name: opt-"+n+"\n") {
+			t.Errorf("missing opt-%s twin for PINBALL_OPT_MODEL_PREFIX", n)
+		}
+	}
+	if !strings.Contains(out, `value: "heavy"`) || !strings.Contains(out, "PINBALL_OPT_JUDGES") {
+		t.Error("optimizer must judge with a rendered alias (PINBALL_OPT_JUDGES=heavy)")
+	}
+}
+
 func TestOpenAIBaseURL(t *testing.T) {
 	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", ModelsFile: openaiModels(t), OpenAIBaseURL: "http://s:1/v1"})
 	if !strings.Contains(c, `baseUrl: "http://s:1/v1"`) {

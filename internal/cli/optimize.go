@@ -63,6 +63,8 @@ request-log database. Off by default.`,
 			"-e", "PINBALL_CONFIG=/etc/pinball/pinball.yaml",
 			"-e", fmt.Sprintf("PINBALL_OPT_GATEWAY_URL=http://host.docker.internal:%d", s.cfg.GatewayPort),
 			"-e", "PINBALL_OPT_MODEL_PREFIX=opt-",
+			// pinball's default judges are aliases convergence never renders.
+			"-e", "PINBALL_OPT_JUDGES=heavy",
 			"-e", "PINBALL_OPT_BUDGET_USD=10.0",
 			// Passed by name so the DSN is not visible in the process list.
 			"-e", "PINBALL_OPT_DB_DSN",

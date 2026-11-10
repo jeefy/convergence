@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Pinball optimizer could never replay candidates: it sends them as `opt-<pinball model>` (`PINBALL_OPT_MODEL_PREFIX`), but only the internal `pinball-<model>` aliases were rendered, so every candidate call was a 404. The gateway config (local and cluster) now renders public `opt-` twins when the request log is configured. The CronJob and `convergence optimize` also set `PINBALL_OPT_JUDGES=heavy`; pinball's default judges (`judge-opus`, `judge-argon`) are aliases Convergence never renders.
+
 ## [0.2.5] - 2026-11-09
 
 ### Changed

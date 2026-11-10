@@ -167,6 +167,15 @@ llm:
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
 {{ end }}
+{{- if .Config.RequestLogDB }}
+    # Public twins of the internal pinball-<id> models for `convergence optimize`
+    # candidate replays (PINBALL_OPT_MODEL_PREFIX=opt-).
+{{- range .Models.Models }}
+    - name: opt-{{ .PinballName }}
+      provider: {reference: {{ providerRef .UpstreamProvider }}}
+      params: {model: {{ .UpstreamModel }}}
+{{- end }}
+{{- end }}
 {{- range .Models.Passthrough }}
     - name: {{ .Name }}
       provider: {reference: {{ if .Endpoint }}{{ .Endpoint }}{{ else }}{{ providerRef .Provider }}{{ end }}}

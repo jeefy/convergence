@@ -388,6 +388,23 @@ func TestRequestLogDBOffByDefaultAndSecretWhenSet(t *testing.T) {
 	}
 }
 
+// The optimizer replays candidates as opt-<pinball id> (PINBALL_OPT_MODEL_PREFIX);
+// pinball-<id> is visibility internal, so public twins must exist iff the
+// request log (and thus the optimizer) is configured.
+func TestOptimizerModelTwins(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "name: opt-") {
+		t.Errorf("opt- twins must not render without request_log_db")
+	}
+	_, files = render(t, func(c *config.Config) { c.RequestLogDB = "postgres://u:pw@db:5432/ag" })
+	ag := files["agentgateway.yaml"]
+	for _, n := range []string{"claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5"} {
+		if !strings.Contains(ag, "- name: opt-"+n+"\n") {
+			t.Errorf("missing opt-%s twin:\n%s", n, ag)
+		}
+	}
+}
+
 func TestOTelTracingOffByDefaultAndRenderedWhenSet(t *testing.T) {
 	_, files := render(t, func(c *config.Config) {})
 	if strings.Contains(files["agentgateway.yaml"], "tracing:") {
