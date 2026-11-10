@@ -112,7 +112,7 @@ func TestCluster_commandsWithFakeKubectl(t *testing.T) {
 	log := writeFakeKubectl(t, "0")
 	for _, args := range [][]string{
 		{"cluster", "install", "--provider", "direct", "--openai-key", "sk-test", "--dry-run"},
-		{"cluster", "install", "--provider", "direct", "--openai-key", "sk-test"},
+		{"cluster", "install", "--provider", "direct", "--openai-key", "sk-test", "--no-backup"},
 		{"cluster", "uninstall", "--yes"},
 		{"cluster", "status"},
 		{"cluster", "logs", "pinball", "--tail", "5", "-f"},
@@ -130,7 +130,7 @@ func TestCluster_commandsWithFakeKubectl(t *testing.T) {
 func TestCluster_kubectlFailures(t *testing.T) {
 	writeFakeKubectl(t, "1")
 	for _, args := range [][]string{
-		{"cluster", "install", "--provider", "direct", "--openai-key", "sk-test"},
+		{"cluster", "install", "--provider", "direct", "--openai-key", "sk-test", "--no-backup"},
 		{"cluster", "uninstall", "--yes"},
 		{"cluster", "status"},
 		{"cluster", "logs"},
