@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `cluster install --request-log-retention DUR` renders a daily CronJob that deletes request-log rows older than DUR in batches (off by default, minimum 24h, the optimizer's sampling window).
+
 ## [0.3.1] - 2026-11-10
 
 ### Added
