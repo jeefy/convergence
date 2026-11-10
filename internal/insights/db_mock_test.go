@@ -28,7 +28,7 @@ type mockRow struct {
 	inTokens            int64
 	outTokens           int64
 	totTokens           int64
-	cost                float64
+	cost                *float64
 	user                string
 	group               string
 	userAgent           string
@@ -121,7 +121,11 @@ func (r *mockRows) Next(dest []driver.Value) error {
 	dest[10] = row.inTokens
 	dest[11] = row.outTokens
 	dest[12] = row.totTokens
-	dest[13] = row.cost
+	if row.cost != nil {
+		dest[13] = *row.cost
+	} else {
+		dest[13] = nil
+	}
 	dest[14] = row.user
 	dest[15] = row.group
 	dest[16] = row.userAgent

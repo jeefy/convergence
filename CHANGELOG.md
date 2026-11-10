@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `insights` reports total cost, cost per tier (with an "N of M rows priced" coverage line) and estimated savings versus a reference model (`--reference-model`, default: the heavy-tier model), also in `--json`. Prices are pinball's optimizer catalog estimates, not invoices.
+
 ## [0.3.1] - 2026-11-10
 
 ### Added

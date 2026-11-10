@@ -44,6 +44,20 @@ func PrintAssessment(w io.Writer, a *Assessment, coachAdvice string) error {
 	}
 	b.WriteString("\n")
 
+	if c := a.Cost; c != nil {
+		fmt.Fprintf(&b, "Cost (estimate, USD; %d of %d rows priced):\n", c.PricedRows, c.TotalRows)
+		fmt.Fprintf(&b, "  Total:       $%.4f\n", c.TotalCost)
+		tiers := make([]string, 0, len(c.CostByTier))
+		for t := range c.CostByTier {
+			tiers = append(tiers, t)
+		}
+		sort.Strings(tiers)
+		for _, t := range tiers {
+			fmt.Fprintf(&b, "  %-10s $%.4f\n", t+":", c.CostByTier[t])
+		}
+		fmt.Fprintf(&b, "  Same tokens on %s: $%.4f, savings: $%.4f\n\n", c.ReferenceModel, c.ReferenceCost, c.Savings)
+	}
+
 	// Models breakdown
 	if len(a.Models) > 0 {
 		b.WriteString("Top Models:\n")
