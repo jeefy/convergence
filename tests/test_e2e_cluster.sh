@@ -13,7 +13,7 @@ if [ ! -x "$BIN" ]; then
 fi
 
 echo "==> Testing 'convergence cluster install --dry-run'..."
-OUTPUT="$("$BIN" cluster install --dry-run --namespace="${NAMESPACE}")"
+OUTPUT="$("$BIN" cluster install --dry-run --namespace="${NAMESPACE}" --copilot-token "ghp_$(printf 'a%.0s' $(seq 36))")"
 
 # Verify key resources exist in rendered YAML
 for resource in "Namespace" "Secret" "ConfigMap" "Deployment" "Service"; do
