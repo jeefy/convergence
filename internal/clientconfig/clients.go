@@ -157,8 +157,8 @@ var clients = []client{
 		name:   "hermes",
 		format: YAML,
 		path:   func(h string) string { return filepath.Join(h, ".hermes", "config.yaml") },
-		ops: func(_ Options, root string) []setOp {
-			return []setOp{{path: []string{"providers", Key}, val: map[string]any{
+		ops: func(o Options, root string) []setOp {
+			ops := []setOp{{path: []string{"providers", Key}, val: map[string]any{
 				"name":     "Convergence",
 				"base_url": root + "/v1",
 				"api_key":  Key,
@@ -170,9 +170,17 @@ var clients = []client{
 					"heavy":    map[string]any{},
 				},
 			}}}
+			if o.SetDefault {
+				// model.base_url is set too: a stale one from another provider would win.
+				ops = append(ops,
+					setOp{path: []string{"model", "provider"}, val: "custom:" + Key},
+					setOp{path: []string{"model", "default"}, val: "auto"},
+					setOp{path: []string{"model", "base_url"}, val: root + "/v1"})
+			}
+			return ops
 		},
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "providers", Key); return ok },
-		note:    "Select it with `/model custom:convergence:auto`; model.default/provider are untouched.",
+		note:    "Select it with `/model custom:convergence:auto`; model.default/provider are untouched unless --set-default.",
 	},
 	{
 		name:   "continue",
