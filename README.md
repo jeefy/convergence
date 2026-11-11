@@ -91,6 +91,8 @@ convergence start
 convergence sandbox run opencode
 ```
 
+`sandbox run hermes` works too. Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat --provider custom --base-url <gateway> --api-key convergence` for a bare `hermes`, `hermes chat` or leading flags. Other Hermes subcommands are passed through unchanged.
+
 For the bundled OpenShell gateway, use `--sandbox openshell` with any provider, including Copilot. With Podman, enable its API socket first (`systemctl --user enable --now podman.socket` on rootless Linux). Convergence mounts the discovered socket and selects OpenShell's Podman driver. On Linux, SELinux labeling is disabled for the OpenShell gateway container so it can access the socket; access to the socket grants control over the user's Podman containers.
 
 ### Kubernetes
@@ -199,6 +201,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 |---|---|---|
 | OpenCode | `convergence config opencode` | `~/.config/opencode/opencode.json` |
 | oh-my-opencode | `convergence config oh-my-opencode` | `~/.omo/omo.jsonc` |
+| OpenClaw | `convergence config openclaw` | `~/.openclaw/openclaw.json` |
 | Claude Code | `convergence config claude-code` | `~/.claude/settings.json` |
 | Aider | `convergence config aider` | `~/.aider.conf.yml` |
 | Goose | `convergence config goose` | `~/.config/goose/config.yaml` |

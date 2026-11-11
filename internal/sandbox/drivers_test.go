@@ -143,3 +143,26 @@ func TestOpenShellStatusBadContext(t *testing.T) {
 		t.Errorf("%+v %v", st, err)
 	}
 }
+
+func TestAgentArgsHermes(t *testing.T) {
+	const u = "http://127.0.0.1:3000/v1"
+	fl := []string{"--provider", "custom", "--base-url", u, "--api-key", "convergence"}
+	for name, c := range map[string]struct {
+		agent string
+		in    []string
+		want  []string
+	}{
+		"bare":       {"hermes", nil, append([]string{"chat"}, fl...)},
+		"flags":      {"/usr/bin/hermes", []string{"-m", "auto"}, append(append([]string{"chat"}, fl...), "-m", "auto")},
+		"chat":       {"hermes", []string{"chat", "-q", "hi"}, append(append([]string{"chat"}, fl...), "-q", "hi")},
+		"other sub":  {"hermes", []string{"gateway", "status"}, []string{"gateway", "status"}},
+		"other tool": {"opencode", []string{"x"}, []string{"x"}},
+	} {
+		if got := AgentArgs(c.agent, c.in, u); !slices.Equal(got, c.want) {
+			t.Errorf("%s: got %v want %v", name, got, c.want)
+		}
+	}
+	if got := AgentArgs("hermes", nil, ""); got != nil {
+		t.Errorf("no inference URL must pass through, got %v", got)
+	}
+}
