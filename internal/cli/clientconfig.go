@@ -142,6 +142,10 @@ oh-my-opencode reads models from OpenCode providers. omo.jsonc was not modified.
 To use Convergence, set the "model" of the agents/categories you want in your
 omo.jsonc to "convergence/auto" or "convergence/pinball".`))
 		})
+	addClientCmd("openclaw", "Add a `convergence` provider to ~/.openclaw/openclaw.json (other keys untouched)",
+		func(c *cobra.Command, f *configFlags) {
+			c.Flags().BoolVar(&f.setDefault, "set-default", false, "Also set agents.defaults.model.primary to convergence/auto")
+		}, nil)
 	addClientCmd("claude-code", "Point Claude Code (~/.claude/settings.json env block) at Convergence", nil, nil)
 	addClientCmd("aider", "Point Aider (~/.aider.conf.yml) at Convergence", nil, nil)
 	addClientCmd("hermes", "Add a `convergence` provider to ~/.hermes/config.yaml", nil, nil)

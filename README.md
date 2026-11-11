@@ -199,6 +199,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 |---|---|---|
 | OpenCode | `convergence config opencode` | `~/.config/opencode/opencode.json` |
 | oh-my-opencode | `convergence config oh-my-opencode` | `~/.omo/omo.jsonc` |
+| OpenClaw | `convergence config openclaw` | `~/.openclaw/openclaw.json` |
 | Claude Code | `convergence config claude-code` | `~/.claude/settings.json` |
 | Aider | `convergence config aider` | `~/.aider.conf.yml` |
 | Goose | `convergence config goose` | `~/.config/goose/config.yaml` |

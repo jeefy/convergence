@@ -48,6 +48,10 @@ var fixtures = []fixture{
 		"{\n  // vscode config\n  \"editor.fontSize\": 14\n}\n",
 		[]string{"// vscode config", `"editor.fontSize": 14`},
 		[]string{`"cline.openAiBaseUrl": "http://localhost:3000/v1"`, `"cline.openAiApiKey": "convergence"`}, nil},
+	{"openclaw", ".openclaw/openclaw.json",
+		"{\n  // my comment\n  \"agents\": {\"defaults\": {\"model\": {\"primary\": \"x/y\"}}},\n  \"models\": {\"providers\": {\"other\": {\"api\": \"x\",},},},\n}\n",
+		[]string{"// my comment", `"primary": "x/y"`, `"other": {"api": "x",}`},
+		[]string{`"convergence"`, "http://localhost:3000/v1", `"openai-completions"`, `"id": "auto"`, `"id": "heavy"`}, nil},
 }
 
 func setup(t *testing.T, f fixture, withFile bool) string {
@@ -243,5 +247,28 @@ func TestListReportsPointed(t *testing.T) {
 		if s.Client == "goose" && s.Present {
 			t.Error("goose should be absent")
 		}
+	}
+}
+
+func TestOpenClawDefaultModelOnlyWithFlag(t *testing.T) {
+	f := fixtures[len(fixtures)-1]
+	p := setup(t, f, true)
+	if _, err := Configure("openclaw", Options{GatewayURL: gw}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, p), `"primary": "x/y"`) || strings.Contains(read(t, p), "pinball") {
+		t.Error("default changed without --set-default or pinball added")
+	}
+	if _, err := Configure("openclaw", Options{GatewayURL: gw, SetDefault: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, p), `"primary": "convergence/auto"`) {
+		t.Error("--set-default not applied")
+	}
+	if _, err := Restore("openclaw", Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if read(t, p) != f.existing {
+		t.Error("round trip after set-default not exact")
 	}
 }
