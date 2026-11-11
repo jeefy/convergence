@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -47,6 +48,21 @@ func Root(u string) string {
 func home() (string, error) { return os.UserHomeDir() }
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
+
+// hermesHome mirrors Hermes' own lookup: $HERMES_HOME, else %LOCALAPPDATA%\hermes
+// on Windows, else ~/.hermes.
+func hermesHome(h string) string {
+	if d := strings.TrimSpace(os.Getenv("HERMES_HOME")); d != "" {
+		return d
+	}
+	if runtime.GOOS == "windows" {
+		if d := strings.TrimSpace(os.Getenv("LOCALAPPDATA")); d != "" {
+			return filepath.Join(d, "hermes")
+		}
+		return filepath.Join(h, "AppData", "Local", "hermes")
+	}
+	return filepath.Join(h, ".hermes")
+}
 
 var clients = []client{
 	{
@@ -156,7 +172,7 @@ var clients = []client{
 	{
 		name:   "hermes",
 		format: YAML,
-		path:   func(h string) string { return filepath.Join(h, ".hermes", "config.yaml") },
+		path:   func(h string) string { return filepath.Join(hermesHome(h), "config.yaml") },
 		ops: func(_ Options, root string) []setOp {
 			return []setOp{{path: []string{"providers", Key}, val: map[string]any{
 				"name":     "Convergence",
