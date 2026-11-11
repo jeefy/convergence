@@ -31,10 +31,14 @@ More detail, including ports and on-disk layout: [docs/architecture.md](docs/arc
 
 ## Prerequisites
 
-- Linux or macOS on amd64 or arm64. Windows isn't supported; WSL2 works.
+- Linux or macOS on amd64 or arm64. Windows isn't supported natively; use WSL2 (see [Windows](#windows-wsl2)).
 - For the local stack: Docker with the compose plugin, or Podman with `podman-compose` (or `podman compose`).
 - For the cluster mode: `kubectl` access to a cluster.
 - Credentials for one provider (see [Providers](#providers)).
+
+## Windows (WSL2)
+
+Run Convergence inside a WSL2 distro: install it there like on Linux and keep Docker or Podman reachable from that distro. `convergence config <client>` edits files in the distro's home (`~`), not in your Windows profile, so it configures clients that run inside WSL2. For a client on the Windows side, point it at `http://localhost:3000/v1` (API key `convergence`) yourself, or use `--gateway-url` with `--dry-run` to see the values first. Native Windows builds are not tested: several unit tests fail there because they assume a Unix home and file modes, and the tests that set `HOME` write to the real `%USERPROFILE%`.
 
 ## Install
 
