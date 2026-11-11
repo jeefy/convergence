@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jeefy/convergence/internal/models"
 	"github.com/jeefy/convergence/internal/telemetry"
 )
 
@@ -128,4 +129,55 @@ func Snapshot(ctx context.Context, e *Env) (Counters, error) {
 	c.Restored = telemetry.Sum(si, "standin_restored_total", nil)
 	c.Decisions = telemetry.Sum(pb, "pinball_decisions_total", nil)
 	return c, nil
+}
+
+// CheckOllamaModels warns when an ollama model the active mapping routes to
+// is not installed on the configured endpoint. It returns nothing when no
+// tier maps to ollama. An unreachable endpoint is CheckProvider's finding.
+func CheckOllamaModels(ctx context.Context, e *Env) []Result {
+	const name = "ollama models"
+	res, err := models.ForConfig(e.Cfg, e.Dir)
+	if err != nil {
+		return nil // config/models.yaml errors are reported elsewhere
+	}
+	var want []string
+	for _, m := range res.Models {
+		if m.UpstreamProvider == models.UpstreamOllama {
+			want = append(want, m.UpstreamModel)
+		}
+	}
+	if len(want) == 0 {
+		return nil
+	}
+	code, raw, err := e.do(ctx, "GET", e.OllamaURL+"/api/tags", "", "")
+	var tags struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err != nil || code != 200 || json.Unmarshal(raw, &tags) != nil {
+		return []Result{{name, Warn, "cannot list models at " + e.OllamaURL + "/api/tags", "start ollama, or fix ollama_url in ~/.convergence/config.yaml"}}
+	}
+	have := map[string]bool{}
+	for _, m := range tags.Models {
+		have[withTag(m.Name)] = true
+	}
+	var missing []string
+	for _, w := range want {
+		if !have[withTag(w)] {
+			missing = append(missing, w)
+		}
+	}
+	if len(missing) > 0 {
+		return []Result{{name, Warn, "not installed on the ollama endpoint: " + strings.Join(missing, ", "), "run 'ollama pull <model>' for each, or change the mapping in ~/.convergence/models.yaml"}}
+	}
+	return []Result{{name, Pass, fmt.Sprintf("%d mapped model(s) installed", len(want)), ""}}
+}
+
+// withTag adds ollama's implicit ":latest" tag.
+func withTag(m string) string {
+	if !strings.Contains(m, ":") {
+		return m + ":latest"
+	}
+	return m
 }

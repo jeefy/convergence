@@ -495,3 +495,36 @@ func TestOutputAndExitCode(t *testing.T) {
 		t.Fatalf("%v %+v", err, back)
 	}
 }
+
+func TestCheckOllamaModels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `{"models":[{"name":"gemma4:26b"},{"name":"qwen2.5-coder:14b"},{"name":"qwen2.5-coder:32b"}]}`)
+	}))
+	defer srv.Close()
+	write := func(e *Env, light string) {
+		y := "ollama:\n  claude-haiku-5.5: " + light + "\n"
+		if err := os.WriteFile(filepath.Join(e.Dir, "models.yaml"), []byte(y), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e := newEnv(t)
+	e.OllamaURL = srv.URL
+	write(e, "gemma4:26b")
+	if rs := CheckOllamaModels(context.Background(), e); len(rs) != 1 || rs[0].Status != Pass {
+		t.Fatalf("installed: %+v", rs)
+	}
+	write(e, "nope:1b")
+	rs := CheckOllamaModels(context.Background(), e)
+	if len(rs) != 1 || rs[0].Status != Warn || !strings.Contains(rs[0].Detail, "nope:1b") {
+		t.Fatalf("missing: %+v", rs)
+	}
+	e.Cfg.Provider = config.ProviderCopilot
+	if rs := CheckOllamaModels(context.Background(), e); len(rs) != 0 {
+		t.Fatalf("copilot should skip: %+v", rs)
+	}
+	e.Cfg.Provider = config.ProviderOllama
+	e.OllamaURL = "http://127.0.0.1:1"
+	if rs := CheckOllamaModels(context.Background(), e); len(rs) != 1 || rs[0].Status != Warn {
+		t.Fatalf("unreachable: %+v", rs)
+	}
+}
