@@ -173,14 +173,14 @@ var clients = []client{
 			if o.SetDefault {
 				// model.base_url is set too: a stale one from another provider would win.
 				ops = append(ops,
-					setOp{path: []string{"model", "provider"}, val: "custom:" + Key},
+					setOp{path: []string{"model", "provider"}, val: Key},
 					setOp{path: []string{"model", "default"}, val: "auto"},
 					setOp{path: []string{"model", "base_url"}, val: root + "/v1"})
 			}
 			return ops
 		},
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "providers", Key); return ok },
-		note:    "Select it with `/model custom:convergence:auto`; model.default/provider are untouched unless --set-default.",
+		note:    "Select it with `/model convergence:auto`; model.default/provider are untouched unless --set-default.",
 	},
 	{
 		name:   "continue",

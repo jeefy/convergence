@@ -202,14 +202,14 @@ func TestHermesDefaultModelOnlyWithFlag(t *testing.T) {
 	if _, err := Configure("hermes", Options{GatewayURL: gw}); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(t, p); !strings.Contains(got, "default: foo") || strings.Contains(got, "custom:convergence") {
+	if got := read(t, p); !strings.Contains(got, "default: foo") || strings.Contains(got, "provider: convergence") {
 		t.Errorf("default model changed without --set-default:\n%s", got)
 	}
 	if _, err := Configure("hermes", Options{GatewayURL: gw, SetDefault: true}); err != nil {
 		t.Fatal(err)
 	}
 	got := read(t, p)
-	for _, w := range []string{"provider: custom:convergence", "default: auto", "base_url: http://localhost:3000/v1"} {
+	for _, w := range []string{"provider: convergence", "default: auto", "base_url: http://localhost:3000/v1"} {
 		if !strings.Contains(got, w) {
 			t.Errorf("--set-default: missing %q in:\n%s", w, got)
 		}
