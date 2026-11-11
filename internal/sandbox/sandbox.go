@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -246,4 +248,22 @@ func (d *nonoDriver) RunCommand(agent string, args []string, mounts ...string) (
 		"ANTHROPIC_API_KEY=unused",
 	}
 	return cmd, env, nil
+}
+
+// AgentArgs adapts agent arguments to a harness that ignores OPENAI_BASE_URL.
+// Hermes only honors its config or `hermes chat --base-url`, so for a bare
+// `hermes` (or leading flags) we run `hermes chat` pointed at the gateway.
+// shortcut: other Hermes subcommands are passed through untouched, add them when asked.
+func AgentArgs(agent string, args []string, inferenceURL string) []string {
+	if filepath.Base(agent) != "hermes" || inferenceURL == "" {
+		return args
+	}
+	flags := []string{"--provider", "custom", "--base-url", inferenceURL, "--api-key", "convergence"}
+	switch {
+	case len(args) == 0 || strings.HasPrefix(args[0], "-"):
+		return append(append([]string{"chat"}, flags...), args...)
+	case args[0] == "chat":
+		return append(append([]string{"chat"}, flags...), args[1:]...)
+	}
+	return args
 }
