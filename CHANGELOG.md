@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat` with `--provider custom --base-url <inference URL> --api-key convergence`. Other Hermes subcommands are passed through.
+
 ## [0.3.1] - 2026-11-10
 
 ### Added

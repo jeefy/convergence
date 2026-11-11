@@ -101,7 +101,7 @@ var sandboxRunCmd = &cobra.Command{
 		agent := args[0]
 		agentArgs := args[1:]
 
-		execCmd, envVars, err := driver.RunCommand(agent, agentArgs, sandboxMounts...)
+		execCmd, envVars, err := driver.RunCommand(agent, sandbox.AgentArgs(agent, agentArgs, driver.InferenceURL()), sandboxMounts...)
 		if err != nil {
 			return err
 		}
