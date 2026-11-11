@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/models"
@@ -35,13 +36,16 @@ type ClusterOptions struct {
 	RequestLogPostgres   bool
 	RequestLogPGPassword string // generated when empty; reuse the existing one on re-install (PVC keeps the old one)
 	RequestLogPGSize     string
-	OpenAIBaseURL        string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
-	StandinPatternsFile  string // optional patterns.yaml; rendered into ConfigMap stand-in-patterns (replaces the image default)
-	ModelsFile           string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
-	IngressHost          string // when set, renders an Ingress resource pointing to agentgateway:3000
-	EnablePDB            bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
-	PassthroughSecret    string // existing Secret whose keys are the passthrough api_key_env names
-	DryRun               bool
+	// RequestLogRetention (Go duration, empty = keep forever) renders a daily CronJob deleting older request_logs.
+	RequestLogRetention string
+	RetentionSeconds    int64  // derived from RequestLogRetention
+	OpenAIBaseURL       string // testing/self-hosted OpenAI-compatible endpoint for provider=direct
+	StandinPatternsFile string // optional patterns.yaml; rendered into ConfigMap stand-in-patterns (replaces the image default)
+	ModelsFile          string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
+	IngressHost         string // when set, renders an Ingress resource pointing to agentgateway:3000
+	EnablePDB           bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
+	PassthroughSecret   string // existing Secret whose keys are the passthrough api_key_env names
+	DryRun              bool
 
 	ImageAgentGateway string
 	ImageStandIn      string
@@ -56,6 +60,8 @@ type ClusterOptions struct {
 
 // RequestLogEnabled reports whether agentgateway writes the Postgres request log.
 func (o *ClusterOptions) RequestLogEnabled() bool { return o.RequestLogDB != "" }
+
+const minRetention = 24 * time.Hour
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
 	if err := opts.OTel.Validate(); err != nil {
@@ -87,6 +93,20 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	}
 	if opts.RequestLogDB != "" && opts.RequestLogPostgres {
 		return "", fmt.Errorf("--request-log-db and --request-log-postgres are mutually exclusive")
+	}
+	if opts.RequestLogRetention != "" {
+		d, err := time.ParseDuration(opts.RequestLogRetention)
+		if err != nil {
+			return "", fmt.Errorf("invalid --request-log-retention %q: %w (use a Go duration such as 720h)", opts.RequestLogRetention, err)
+		}
+		// The optimizer samples the last day (pinball-optimize --days default 1).
+		if d < minRetention {
+			return "", fmt.Errorf("--request-log-retention %q is shorter than the optimizer's 24h sampling window", opts.RequestLogRetention)
+		}
+		if opts.RequestLogDB == "" && !opts.RequestLogPostgres {
+			return "", fmt.Errorf("--request-log-retention needs --request-log-postgres or --request-log-db")
+		}
+		opts.RetentionSeconds = int64(d.Seconds())
 	}
 	if opts.RequestLogPostgres {
 		if opts.RequestLogPGPassword == "" {
