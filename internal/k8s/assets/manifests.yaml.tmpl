@@ -610,6 +610,7 @@ spec:
     - from:
         - podSelector: {matchLabels: {app: agentgateway}}
         - podSelector: {matchLabels: {app: pinball-optimize}}
+        - podSelector: {matchLabels: {app: request-log-retention}}
       ports:
         - {protocol: TCP, port: 5432}
 {{- end }}
@@ -698,6 +699,61 @@ spec:
             - name: overlay
               persistentVolumeClaim:
                 claimName: pinball-overlay
+{{- end }}
+{{- if .RequestLogRetention }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: request-log-retention
+  namespace: {{ .Namespace }}
+spec:
+  schedule: "17 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: request-log-retention
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: purge
+              image: {{ .Images.Postgres }}
+              env:
+                - name: DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: pinball-optimizer-db
+                      key: dsn
+              # Batched so a first run on a large table does not hold one huge transaction.
+              # request_log_payloads rows go with their request via ON DELETE CASCADE.
+              command:
+                - sh
+                - -c
+                - |
+                  while :; do
+                    n=$(psql "$DSN" -qtAX -c "WITH d AS (DELETE FROM request_logs WHERE id IN (SELECT id FROM request_logs WHERE completed_at < now() - make_interval(secs => {{ .RetentionSeconds }}) LIMIT 5000) RETURNING 1) SELECT count(*) FROM d") || exit 1
+                    echo "deleted $n"
+                    [ "$n" -gt 0 ] || break
+                  done
+              resources:
+                requests: {cpu: 20m, memory: 32Mi}
+                limits: {cpu: 200m, memory: 128Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: ["ALL"]}
+                seccompProfile: {type: RuntimeDefault}
 {{- end }}
 {{- if eq .Provider "copilot" }}
 ---

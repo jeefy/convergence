@@ -80,7 +80,7 @@ P
   validate "k8s/$name" "$WORK/k8s-$name-config.yaml"
 }
 
-k8s_variant copilot --provider copilot
+k8s_variant copilot --provider copilot --copilot-token "$FAKE_GH_TOKEN"
 k8s_variant direct --provider direct --openai-key sk-test
 k8s_variant fail-open --provider direct --openai-key sk-test --fail-open
 k8s_variant otel --provider direct --openai-key sk-test --otel-endpoint collector:4317
