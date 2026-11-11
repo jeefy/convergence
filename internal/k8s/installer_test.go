@@ -577,3 +577,29 @@ esac
 		t.Fatal("direct provider must not pick up a Copilot token")
 	}
 }
+
+func TestRequestLogRetention(t *testing.T) {
+	// RenderManifests mutates its options, so build each one fresh.
+	off, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", RequestLogPostgres: true})
+	if err != nil || strings.Contains(off, "name: request-log-retention") {
+		t.Fatalf("retention CronJob rendered while off: %v", err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", RequestLogPostgres: true, RequestLogRetention: "720h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"name: request-log-retention", `schedule: "17 2 * * *"`, "secs => 2592000", "completed_at <", "LIMIT 5000"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	for _, bad := range []ClusterOptions{
+		{Namespace: "x", Provider: "direct", RequestLogPostgres: true, RequestLogRetention: "12h"},
+		{Namespace: "x", Provider: "direct", RequestLogPostgres: true, RequestLogRetention: "30d"},
+		{Namespace: "x", Provider: "direct", RequestLogRetention: "720h"},
+	} {
+		if _, err := RenderManifests(&bad); err == nil {
+			t.Errorf("expected error for %+v", bad)
+		}
+	}
+}

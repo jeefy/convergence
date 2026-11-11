@@ -91,6 +91,8 @@ convergence start
 convergence sandbox run opencode
 ```
 
+`sandbox run hermes` works too. Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat --provider custom --base-url <gateway> --api-key convergence` for a bare `hermes`, `hermes chat` or leading flags. Other Hermes subcommands are passed through unchanged.
+
 For the bundled OpenShell gateway, use `--sandbox openshell` with any provider, including Copilot. With Podman, enable its API socket first (`systemctl --user enable --now podman.socket` on rootless Linux). Convergence mounts the discovered socket and selects OpenShell's Podman driver. On Linux, SELinux labeling is disabled for the OpenShell gateway container so it can access the socket; access to the socket grants control over the user's Podman containers.
 
 ### Kubernetes
@@ -210,6 +212,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 |---|---|---|
 | OpenCode | `convergence config opencode` | `~/.config/opencode/opencode.json` |
 | oh-my-opencode | `convergence config oh-my-opencode` | `~/.omo/omo.jsonc` |
+| OpenClaw | `convergence config openclaw` | `~/.openclaw/openclaw.json` |
 | Claude Code | `convergence config claude-code` | `~/.claude/settings.json` |
 | Aider | `convergence config aider` | `~/.aider.conf.yml` |
 | Goose | `convergence config goose` | `~/.config/goose/config.yaml` |
@@ -238,7 +241,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 | `config list` | List supported clients. |
 | `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
 | `config <client> restore [--force]` | Restore the client's backup. |
-| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--ingress-host HOST] [--enable-pdb] [--request-log-db DSN \| --request-log-postgres] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--extproc-timeout DUR]` | Apply manifests to the current kube context. `--dry-run` prints them. Omitted secrets (`--copilot-token`, Stand-In salt, `--request-log-postgres-password`) are reused from the existing namespace. |
+| `cluster install [--namespace NS] [--provider copilot\|direct] [--copilot-token T] [--openai-key K] [--anthropic-key K] [--models-file F] [--fail-open] [--ingress-host HOST] [--enable-pdb] [--request-log-db DSN \| --request-log-postgres] [--request-log-retention DUR] [--optimizer-dsn DSN] [--opt-schedule CRON] [--dry-run] [--image-agentgateway IMG] [--image-standin IMG] [--image-pinball IMG] [--image-copilot-api IMG] [--extproc-timeout DUR]` | Apply manifests to the current kube context. `--dry-run` prints them. Omitted secrets (`--copilot-token`, Stand-In salt, `--request-log-postgres-password`) are reused from the existing namespace. |
 | `cluster status [--namespace NS]` | Rollout and pod health. |
 | `cluster logs [-f] [--tail N] [service]` | Stream logs from in-cluster pods. |
 | `cluster backup --out DIR [--namespace NS]` | `pg_dump -Fc` of the request-log Postgres plus a tar of the pinball overlay, timestamped. See [Backup and restore](#backup-and-restore). |
@@ -300,6 +303,8 @@ To make the local stack feed the optimizer, give agentgateway a Postgres you ope
 The request log is the Pinball optimizer's training data. `convergence cluster backup --out ./bk` writes `request_logs-<ts>.dump` and `pinball-overlay-<ts>.tar` (the overlay is optional; a missing one only warns). `convergence cluster restore --from ./bk/request_logs-<ts>.dump` replaces the data in the running Postgres. `cluster install` takes a backup into `~/.convergence/backups/` first when `request-log-postgres` already exists (keeps the last 5; skip with `--no-backup`). Dumps contain prompts: keep them as protected as the database.
 
 `cluster uninstall` deletes the namespace and, with most storage classes (reclaim policy `Delete`), the PVs. Back up first, or keep the volumes: `kubectl get pv`, then `kubectl patch pv <name> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'` for the `request-log-postgres` and `pinball-overlay` claims. Scheduled/off-cluster backups (S3, CronJob) are not included.
+
+**Retention.** The request log grows without bound by default. `cluster install --request-log-retention 720h` (with `--request-log-postgres` or `--request-log-db`) renders a daily CronJob `request-log-retention` (02:17) that deletes `request_logs` rows older than that duration in batches of 5000 (payloads go with them via `ON DELETE CASCADE`). Minimum `24h`, the optimizer's sampling window (`pinball-optimize --days`, default 1); shorter values fail at install. Off when omitted, and removing the flag on a re-install leaves an already-created CronJob in place until you `kubectl delete cronjob request-log-retention`. Deleted rows are gone: take a `cluster backup` first.
 
 ## Observability
 
