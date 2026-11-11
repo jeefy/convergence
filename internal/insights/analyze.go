@@ -22,6 +22,7 @@ type Assessment struct {
 	ContextBloatCount  int             `json:"context_bloat_count"`
 	RapidRetryCount    int             `json:"rapid_retry_count"`
 	HeavyOnSimpleCount int             `json:"heavy_on_simple_count"`
+	Cost               *CostSummary    `json:"cost,omitempty"`
 	Findings           []Finding       `json:"findings"`
 	SampledPrompts     []SampledPrompt `json:"sampled_prompts,omitempty"`
 }

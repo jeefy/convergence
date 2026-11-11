@@ -7,7 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/insights"
+	"github.com/jeefy/convergence/internal/models"
 )
 
 var (
@@ -16,6 +18,7 @@ var (
 	insightsJSON       bool
 	insightsDBDSN      string
 	insightsGatewayURL string
+	insightsRefModel   string
 )
 
 var insightsCmd = &cobra.Command{
@@ -61,6 +64,15 @@ or cluster install --request-log-postgres / --request-log-db), or pass --db-dsn.
 		}
 
 		assessment := insights.Analyze(records, insightsSince)
+		ref := insightsRefModel
+		if ref == "" {
+			if r, err := models.Resolve(config.ProviderCopilot, nil); err == nil {
+				ref = r.TierModel("heavy") // tier names are provider-independent
+			}
+		}
+		if assessment.Cost, err = insights.ComputeCost(records, ref); err != nil {
+			return err
+		}
 
 		var coachAdvice string
 		if insightsCoach {
@@ -108,5 +120,6 @@ func init() {
 	insightsCmd.Flags().BoolVar(&insightsJSON, "json", false, "Output insights in JSON format")
 	insightsCmd.Flags().StringVar(&insightsDBDSN, "db-dsn", "", "Postgres DSN of the request-log database (falls back to config request_log_db)")
 	insightsCmd.Flags().StringVar(&insightsGatewayURL, "gateway-url", "", "Convergence gateway URL for coaching generation (default: http://127.0.0.1:<port>)")
+	insightsCmd.Flags().StringVar(&insightsRefModel, "reference-model", "", "Model to price savings against (default: the heavy-tier model)")
 	rootCmd.AddCommand(insightsCmd)
 }

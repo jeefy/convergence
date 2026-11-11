@@ -241,7 +241,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 | `models` / `models init` | Show the tier to upstream model mapping / write a starter `~/.convergence/models.yaml`. |
 | `logs [-f] [service]` | Show (or follow) logs for all services or one of `agentgateway`, `stand-in`, `pinball`, `copilot-api`. |
 | `stats [--json] [--watch]` | Request counts, tokens, latency quantiles (p50/p90/p99), tier decisions and redactions read from Prometheus metrics. |
-| `insights [--since 1d\|7d\|30d] [--coach] [--json] [--db-dsn DSN] [--gateway-url URL]` | Analyze prompt and response patterns, context bloat, and tier usage from agentgateway's request log with optional AI coaching. |
+| `insights [--since 1d\|7d\|30d] [--coach] [--json] [--db-dsn DSN] [--gateway-url URL] [--reference-model M]` | Analyze prompt and response patterns, context bloat, and tier usage from agentgateway's request log with optional AI coaching. |
 | `config list` | List supported clients. |
 | `config <client> [--dry-run] [--gateway-url URL]` | Point a client at the gateway. |
 | `config <client> restore [--force]` | Restore the client's backup. |
@@ -291,6 +291,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 `convergence insights` inspects agentgateway's Postgres request log across a time window (`--since 1d|7d|30d`, default `7d`) to provide usage assessment and coaching:
 
 - **Usage and tier distributions:** Request counts, token volume (input vs output), average latency, model breakdown, and Pinball tier allocation (`light`, `standard`, `heavy`).
+- **Cost and savings:** total logged cost, cost per tier and the estimated saving versus pricing the same tokens on a reference model (`--reference-model`, default the heavy-tier model; rates are pinball's optimizer estimates). Rows without a cost are excluded and counted ("N of M rows priced").
 - **Pattern detection:** Identifies context bloat (massive prompts producing minimal completions), heavy-tier over-utilization on simple queries, rapid duplicate retries, and high error rates.
 - **AI coaching (`--coach`):** Synthesizes actionable recommendations tailored to observed prompt patterns via the local Convergence gateway (`POST /v1/chat/completions`, model `auto`).
 

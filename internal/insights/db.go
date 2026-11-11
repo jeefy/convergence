@@ -37,7 +37,7 @@ SELECT
 	COALESCE(l.input_tokens, 0),
 	COALESCE(l.output_tokens, 0),
 	COALESCE(l.total_tokens, 0),
-	COALESCE(l.cost, 0.0),
+	l.cost,
 	COALESCE(l.agentgateway_user, ''),
 	COALESCE(l.agentgateway_group, ''),
 	COALESCE(l.user_agent_name, ''),
@@ -65,6 +65,7 @@ ORDER BY l.completed_at ASC
 		var attrBytes []byte
 		var promptBytes []byte
 		var compBytes []byte
+		var cost sql.NullFloat64
 
 		err := rows.Scan(
 			&r.ID,
@@ -80,7 +81,7 @@ ORDER BY l.completed_at ASC
 			&r.InputTokens,
 			&r.OutputTokens,
 			&r.TotalTokens,
-			&r.Cost,
+			&cost,
 			&r.AgentgatewayUser,
 			&r.AgentgatewayGroup,
 			&r.UserAgentName,
@@ -92,6 +93,8 @@ ORDER BY l.completed_at ASC
 		if err != nil {
 			return nil, fmt.Errorf("scanning request_log row: %w", err)
 		}
+
+		r.Cost, r.Priced = cost.Float64, cost.Valid
 
 		if len(attrBytes) > 0 {
 			var attrs map[string]any

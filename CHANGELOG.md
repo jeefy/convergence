@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `insights` reports total cost, cost per tier (with an "N of M rows priced" coverage line) and estimated savings versus a reference model (`--reference-model`, default: the heavy-tier model), also in `--json`. Prices are pinball's optimizer catalog estimates, not invoices.
 - `convergence doctor` warns when a model that `models.yaml` maps to Ollama is not installed on the configured endpoint. README documents mapping the light tier to a local Ollama model.
 - `cluster install --request-log-retention DUR` renders a daily CronJob that deletes request-log rows older than DUR in batches (off by default, minimum 24h, the optimizer's sampling window).
 - `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat` with `--provider custom --base-url <inference URL> --api-key convergence`. Other Hermes subcommands are passed through.

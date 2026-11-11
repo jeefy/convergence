@@ -21,6 +21,7 @@ type RequestRecord struct {
 	OutputTokens        int64
 	TotalTokens         int64
 	Cost                float64
+	Priced              bool // cost column was non-NULL
 	AgentgatewayUser    string
 	AgentgatewayGroup   string
 	UserAgentName       string
