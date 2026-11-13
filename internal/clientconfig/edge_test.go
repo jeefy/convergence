@@ -3,6 +3,7 @@ package clientconfig
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -465,3 +466,32 @@ func TestYAMLEdges(t *testing.T) {
 }
 
 var pathA = []string{"a", "b"}
+
+func TestHermesHomeOverride(t *testing.T) {
+	d := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HERMES_HOME", d)
+	r, err := Configure("hermes", Options{GatewayURL: gw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(d, "config.yaml"); r.Path != want {
+		t.Errorf("path = %s, want %s", r.Path, want)
+	}
+	if !exists(filepath.Join(d, "config.yaml")) {
+		t.Error("config.yaml not written under HERMES_HOME")
+	}
+}
+
+func TestHermesHomeWindowsDefault(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("LOCALAPPDATA default is Windows-only")
+	}
+	d := t.TempDir()
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("HERMES_HOME", "")
+	t.Setenv("LOCALAPPDATA", d)
+	if got, want := hermesHome("unused"), filepath.Join(d, "hermes"); got != want {
+		t.Errorf("hermesHome = %s, want %s", got, want)
+	}
+}
