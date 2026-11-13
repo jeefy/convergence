@@ -29,7 +29,7 @@ type Images struct {
 
 var PinnedImages = Images{
 	AgentGateway: "cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2",
-	StandIn:      "ghcr.io/jeefy/stand-in:0.6.2@sha256:846044102ae1990e924bf43f345addaaa63a5a387c12ad26cb0393f98716d414",
+	StandIn:      "ghcr.io/jeefy/stand-in:0.6.3@sha256:e1c150aada9e059601e7c0552b0d9fa30921c0e92f343fcba0a5b66f08066f01",
 	Pinball:      "ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
 	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",

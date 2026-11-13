@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
 ### Added
 
 - `convergence skills scan` and `skills build`: vet agent skills with NVIDIA SkillSpector (pinned v2.13.4) in a container. Static by default (`--network=none`); `--llm` adds semantic analysis through the gateway with a model that honors forced tool calls (`skill_scan_model`).
@@ -17,6 +19,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Bump pinned Stand-In image to `0.6.3` (`ghcr.io/jeefy/stand-in:0.6.3@sha256:e1c150aada9e059601e7c0552b0d9fa30921c0e92f343fcba0a5b66f08066f01`): checksum-validated payment card and IBAN rules, base64 image payloads skipped, Meta `EAA` rule no longer rewrites base64 image data.
 - README, `docs/architecture.md` and `CONTRIBUTING.md` reorganized: model routing collected in one section, trimmed CLI table (`--help` is authoritative), corrected file modes and the digest-pinning note, and the Kubernetes resource table completed.
 
 ### Fixed
