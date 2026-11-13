@@ -148,7 +148,10 @@ omo.jsonc to "convergence/auto" or "convergence/pinball".`))
 		}, nil)
 	addClientCmd("claude-code", "Point Claude Code (~/.claude/settings.json env block) at Convergence", nil, nil)
 	addClientCmd("aider", "Point Aider (~/.aider.conf.yml) at Convergence", nil, nil)
-	addClientCmd("hermes", "Add a `convergence` provider to ~/.hermes/config.yaml", nil, nil)
+	addClientCmd("hermes", "Add a `convergence` provider to ~/.hermes/config.yaml",
+		func(c *cobra.Command, f *configFlags) {
+			c.Flags().BoolVar(&f.setDefault, "set-default", false, "Also make convergence / auto the default model")
+		}, nil)
 	addClientCmd("goose", "Point Goose (~/.config/goose/config.yaml) at Convergence", nil, nil)
 	addClientCmd("continue", "Add Convergence to Continue (~/.continue/config.yaml)", nil, nil)
 	addClientCmd("zed", "Point Zed (~/.config/zed/settings.json) at Convergence", nil, nil)
