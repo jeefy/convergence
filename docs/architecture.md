@@ -27,18 +27,18 @@ Every request to the gateway goes through the same four steps.
 
 Failure behavior is set in the gateway config:
 
-- Stand-In ext_proc: `failureMode: failClosed` by default. If Stand-In is unreachable, requests are rejected. `init --fail-open` (local) or `cluster install --fail-open` (cluster) switch it to `failOpen`, where requests continue **unscrubbed**.
-- Pinball ext_authz: `failureMode: allow`. If Pinball is unreachable, the request goes to the fallback target (the standard-tier model). Pinball only chooses a model, so this doesn't affect confidentiality.
+- Stand-In ext_proc: `failureMode: failClosed` by default. If Stand-In is unreachable, requests are rejected. `init --fail-open` (local) or `cluster install --fail-open` switch it to `failOpen`, where requests continue **unscrubbed**.
+- Pinball ext_authz: `failureMode: allow`. If Pinball is unreachable, the request goes to the standard-tier model. Pinball only chooses a model, so this doesn't affect confidentiality.
 
 Anthropic Messages requests (`/v1/messages`) are translated by agentgateway, so Claude Code and OpenAI-style clients share the same endpoint.
 
 ## Local mode (docker/podman compose)
 
-Podman lifecycle commands use `podman compose`, which delegates to an external provider. `compose_provider` in `config.yaml` may select `docker-compose` (requires the Podman API socket) or `podman-compose` (invokes Podman directly). Empty or `auto` keeps Podman's environment/config-based selection; explicit choices override `PODMAN_COMPOSE_PROVIDER`. Docker Engine always uses its Compose plugin. `doctor` probes the configured provider.
+Docker uses its compose plugin. Podman uses `podman compose`, which delegates to the provider selected by `compose_provider` in `config.yaml`: `docker-compose` (needs the Podman API socket) or `podman-compose` (talks to Podman directly). Empty or `auto` leaves the choice to Podman (`PODMAN_COMPOSE_PROVIDER`, `containers.conf`). `doctor` probes the configured provider.
 
-Before starting the stack, Convergence checks for running services so it does not treat its own published ports as conflicts. Docker uses `compose ps`; Podman uses native `ps` filtered by the rendered Compose file's `com.docker.compose.project.config_files` label and running state, reading service names from the `Labels` map's `com.docker.compose.service` entry. This works on older Podman releases without the `Label` template helper. Both `podman-compose` and Docker Compose set these labels. Failed checks include stderr.
+Before `start`, Convergence lists the stack's running services (Docker: `compose ps`; Podman: `podman ps` filtered by the compose project labels) so its own published ports are not reported as conflicts. On Linux with netavark it also checks that `nft` has JSON support.
 
-For Linux Podman with netavark, startup checks for an `nft` binary that explicitly reports missing JSON support. Compose startup output is streamed. With OpenShell, startup discovers and checks the Podman API socket, mounts it at `/var/run/docker.sock` in the gateway, and selects OpenShell's Podman driver. On Linux the OpenShell gateway uses `label=disable` to access the socket; other services retain their SELinux settings. The socket grants the gateway control of the user's Podman containers. Docker retains its Docker socket and driver.
+With the OpenShell sandbox, `start` discovers the engine's API socket, mounts it at `/var/run/docker.sock` in the OpenShell gateway container and selects the matching OpenShell driver. On Linux with Podman that container runs with `label=disable` so it can reach the socket; the other services keep their SELinux labels. Whoever holds the socket controls all of the user's containers.
 
 ### Ports
 
@@ -57,20 +57,22 @@ All host ports bind to `bind_address` (default `127.0.0.1`).
 
 ### Files under `~/.convergence`
 
-The optional copilot-api and OpenShell gateway are Compose services. Their named volumes, `copilot-data` and `openshell-data`, share one top-level `volumes` mapping when both are enabled.
+Secrets live only in `config.yaml` and `.env`. The rendered files are world-readable because non-root containers bind-mount them; they contain `${VAR}` references, never values.
 
 | Path | Mode | Contents |
 |---|---|---|
 | `config.yaml` | 0600 | Engine, provider, sandbox, ports, `bind_address`, provider credentials (plaintext) |
-| `.env` | 0600 | Secrets injected into compose (`STANDIN_SALT`, API keys, Copilot token) |
-| `docker-compose.yaml` | 0600 | Rendered compose stack, no secrets |
-| `agentgateway.yaml` | 0600 | Rendered gateway config (listeners, ext_proc/ext_authz, backends) |
-| `pinball.yaml` | 0600 | Model catalog and tier assignments, generated from the model mapping |
-| `openshell.toml` | 0644 | Rendered OpenShell gateway config (schema v2, Docker or Podman driver, openshell sandbox only) |
+| `.env` | 0600 | Secrets injected into compose (`STANDIN_SALT`, API keys, Copilot token, passthrough keys) |
+| `docker-compose.yaml` | 0644 | Rendered compose stack |
+| `agentgateway.yaml` | 0644 | Rendered gateway config (listeners, ext_proc/ext_authz, backends) |
+| `pinball.yaml` | 0644 | Model catalog and tier assignments, generated from the model mapping |
+| `openshell.toml` | 0644 | Rendered OpenShell gateway config (openshell sandbox only) |
 | `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
+| `skill-scan.json` | user | Cached result of the last `skills scan` |
+| `backups/` | user | Request-log dumps taken by `cluster install` before an upgrade (last 5) |
 | `logs/` | 0700 | Gateway access logs |
 
-`convergence uninstall --purge` deletes this directory.
+copilot-api and the OpenShell gateway are optional compose services with named volumes `copilot-data` and `openshell-data`. `convergence uninstall --purge` deletes the whole directory.
 
 ## Kubernetes mode
 
@@ -83,14 +85,22 @@ The optional copilot-api and OpenShell gateway are Compose services. Their named
 | Secret | `convergence-copilot` | Copilot token (copilot provider only) |
 | Secret | `agentgateway-config` | Rendered gateway config, including direct-provider API keys |
 | ConfigMap | `pinball-config` | Model catalog (honors `--models-file`) |
+| ConfigMap | `stand-in-patterns` | Only with `--standin-patterns-file` |
 | Deployment + Service | `agentgateway` | ports 3000 (http), 15020 (metrics) |
-| Deployment + Service | `stand-in` | ports 9101 (gRPC), 9102 (metrics, also exposed on the Service) |
+| Deployment + Service | `stand-in` | ports 9101 (gRPC), 9102 (metrics) |
 | Deployment + Service | `pinball` | port 9201 |
 | Deployment + Service | `copilot-api` | port 4141, copilot provider only |
-| Secret, PVC, CronJob | `pinball-optimizer-db`, `pinball-overlay`, `pinball-optimize` | only with `--optimizer-dsn`; schedule `0 3 * * 0` unless `--opt-schedule` is set |
-| NetworkPolicy | `default-deny-ingress` plus allow rules | only the gateway can reach Stand-In, Pinball and copilot-api |
+| StatefulSet + Service + PVC | `request-log-postgres` | Only with `--request-log-postgres` (5Gi) |
+| Secret | `pinball-optimizer-db` | Request-log / optimizer DSN; with `--request-log-*` or `--optimizer-dsn` |
+| PVC + CronJob | `pinball-overlay`, `pinball-optimize` | Optimizer; with `--request-log-*` or `--optimizer-dsn`; schedule `--opt-schedule` (default `0 3 * * 0`) |
+| CronJob | `request-log-retention` | Only with `--request-log-retention` |
+| NetworkPolicy | `default-deny-ingress` plus allow rules | Only the gateway reaches Stand-In, Pinball and copilot-api; only the gateway and optimizer reach Postgres |
+| Ingress | `agentgateway` | Only with `--ingress-host` |
+| PodDisruptionBudget | `agentgateway-pdb`, `stand-in-pdb`, `pinball-pdb` | Only with `--enable-pdb` |
 
-Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agentgateway 3000:3000` or put your own Ingress/Gateway in front of it. The gateway has no client authentication, so restrict who can reach it.
+Omitted secrets (`--copilot-token`, Stand-In salt, Postgres password) are read back from the previous install's Secrets, so re-running `cluster install` does not rotate them.
+
+Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agentgateway 3000:3000` or put your own Ingress or Gateway in front of it. The gateway has no client authentication, so restrict who can reach it.
 
 ## Pinned images
 
@@ -100,10 +110,11 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 | Stand-In | `ghcr.io/jeefy/stand-in:0.6.2@sha256:846044102ae1990e924bf43f345addaaa63a5a387c12ad26cb0393f98716d414` |
 | Pinball | `ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29` |
-| openshell | `ghcr.io/nvidia/openshell/gateway:latest` |
+| openshell | `ghcr.io/nvidia/openshell/gateway:latest` (not pinned) |
+| SkillSpector | built locally by `skills build` as `localhost/convergence-skillspector:v2.13.4` from commit `54824463814a0be01360792523ec7245a69190fc` |
 
-Tags and sha256 digests are pinned for release immutability.
+`--image-*` flags on `init` and `cluster install` override these.
 
 ## Model mapping
 
-`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See the README's model mapping section.
+`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See [Model routing](../README.md#model-routing) in the README.

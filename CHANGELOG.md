@@ -7,17 +7,21 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 
 - `convergence skills scan` and `skills build`: vet agent skills with NVIDIA SkillSpector (pinned v2.13.4) in a container. Static by default (`--network=none`); `--llm` adds semantic analysis through the gateway with a model that honors forced tool calls (`skill_scan_model`).
-- Opt-in: `sandbox run` checks installed skills first with `skill_scan: warn` or `block` (default `off`), reusing the cached scan until the skills change. `doctor` reports the cached result.
-- `insights` reports total cost, cost per tier (with an "N of M rows priced" coverage line) and estimated savings versus a reference model (`--reference-model`, default: the heavy-tier model), also in `--json`. Prices are pinball's optimizer catalog estimates, not invoices.
-- `convergence doctor` warns when a model that `models.yaml` maps to Ollama is not installed on the configured endpoint. README documents mapping the light tier to a local Ollama model.
+- `skill_scan: warn|block` in `config.yaml` (default `off`) makes `sandbox run` check installed skills first, reusing the cached scan until the skills change. `doctor` reports the cached result.
+- `insights` reports total cost, cost per tier (with an "N of M rows priced" coverage line) and estimated savings versus a reference model (`--reference-model`, default the heavy-tier model), also in `--json`. Prices are Pinball's optimizer catalog estimates, not invoices.
+- `doctor` warns when a model that `models.yaml` maps to Ollama is not installed on the configured endpoint. The README documents serving the light tier from a local Ollama model.
 - `cluster install --request-log-retention DUR` renders a daily CronJob that deletes request-log rows older than DUR in batches (off by default, minimum 24h, the optimizer's sampling window).
-- `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat` with `--provider custom --base-url <inference URL> --api-key convergence`. Other Hermes subcommands are passed through.
+- `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat --provider custom --base-url <gateway> --api-key convergence`. Other Hermes subcommands are passed through.
 - `convergence config openclaw` adds a `convergence` provider (models `auto`, `light`, `standard`, `heavy`) to `~/.openclaw/openclaw.json`; `--set-default` also sets `agents.defaults.model.primary`.
-- `convergence config hermes --set-default` makes `convergence` / `auto` the Hermes default model (`model.provider`, `model.default`, `model.base_url`). Without the flag the default stays untouched.
+- `convergence config hermes --set-default` makes `convergence` / `auto` the Hermes default model (`model.provider`, `model.default`, `model.base_url`). Without the flag the default is left alone.
+
+### Changed
+
+- README, `docs/architecture.md` and `CONTRIBUTING.md` reorganized: model routing collected in one section, trimmed CLI table (`--help` is authoritative), corrected file modes and the digest-pinning note, and the Kubernetes resource table completed.
 
 ### Fixed
 
-- `config hermes` writes to Hermes' real config: `$HERMES_HOME`, else `%LOCALAPPDATA%\hermes` on Windows, else `~/.hermes`. It always used `~/.hermes`, which Hermes does not read on Windows or with `HERMES_HOME` set.
+- `config hermes` writes to the config Hermes reads: `$HERMES_HOME`, else `%LOCALAPPDATA%\hermes` on Windows, else `~/.hermes`. It always used `~/.hermes`.
 
 ## [0.3.1] - 2026-11-10
 
