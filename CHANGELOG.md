@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat` with `--provider custom --base-url <inference URL> --api-key convergence`. Other Hermes subcommands are passed through.
 - `convergence config openclaw` adds a `convergence` provider (models `auto`, `light`, `standard`, `heavy`) to `~/.openclaw/openclaw.json`; `--set-default` also sets `agents.defaults.model.primary`.
 
+### Fixed
+
+- `config hermes` writes to Hermes' real config: `$HERMES_HOME`, else `%LOCALAPPDATA%\hermes` on Windows, else `~/.hermes`. It always used `~/.hermes`, which Hermes does not read on Windows or with `HERMES_HOME` set.
+
 ## [0.3.1] - 2026-11-10
 
 ### Added
