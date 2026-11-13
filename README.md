@@ -220,7 +220,7 @@ Worked examples, using the point values in the Pinball README (they may change w
 | Claude Code | `convergence config claude-code` | `~/.claude/settings.json` |
 | Aider | `convergence config aider` | `~/.aider.conf.yml` |
 | Goose | `convergence config goose` | `~/.config/goose/config.yaml` |
-| Hermes Agent | `convergence config hermes [--set-default]` | `~/.hermes/config.yaml` |
+| Hermes Agent | `convergence config hermes [--set-default]` | `config.yaml` in `$HERMES_HOME`, else `%LOCALAPPDATA%\hermes` on Windows, else `~/.hermes` |
 | Continue | `convergence config continue` | `~/.continue/config.json` |
 | Zed | `convergence config zed` | `~/.config/zed/settings.json` |
 | Cline / Roo Code | `convergence config cline` | `~/.config/Code/User/settings.json` |

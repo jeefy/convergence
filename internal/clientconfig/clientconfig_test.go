@@ -58,6 +58,7 @@ func setup(t *testing.T, f fixture, withFile bool) string {
 	t.Helper()
 	h := t.TempDir()
 	t.Setenv("HOME", h)
+	t.Setenv("HERMES_HOME", "")
 	p := filepath.Join(h, f.rel)
 	if withFile {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {

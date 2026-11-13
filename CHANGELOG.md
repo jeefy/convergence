@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - `convergence config openclaw` adds a `convergence` provider (models `auto`, `light`, `standard`, `heavy`) to `~/.openclaw/openclaw.json`; `--set-default` also sets `agents.defaults.model.primary`.
 - `convergence config hermes --set-default` makes `convergence` / `auto` the Hermes default model (`model.provider`, `model.default`, `model.base_url`). Without the flag the default stays untouched.
 
+### Fixed
+
+- `config hermes` writes to Hermes' real config: `$HERMES_HOME`, else `%LOCALAPPDATA%\hermes` on Windows, else `~/.hermes`. It always used `~/.hermes`, which Hermes does not read on Windows or with `HERMES_HOME` set.
+
 ## [0.3.1] - 2026-11-10
 
 ### Added
