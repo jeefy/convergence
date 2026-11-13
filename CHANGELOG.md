@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `cluster install --request-log-retention DUR` renders a daily CronJob that deletes request-log rows older than DUR in batches (off by default, minimum 24h, the optimizer's sampling window).
 - `sandbox run hermes`: Hermes ignores `OPENAI_BASE_URL`, so Convergence runs `hermes chat` with `--provider custom --base-url <inference URL> --api-key convergence`. Other Hermes subcommands are passed through.
 - `convergence config openclaw` adds a `convergence` provider (models `auto`, `light`, `standard`, `heavy`) to `~/.openclaw/openclaw.json`; `--set-default` also sets `agents.defaults.model.primary`.
+- `convergence config hermes --set-default` makes `convergence` / `auto` the Hermes default model (`model.provider`, `model.default`, `model.base_url`). Without the flag the default stays untouched.
 
 ### Fixed
 
