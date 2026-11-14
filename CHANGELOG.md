@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-13
+
+### Changed
+
+- Bump pinned Stand-In image to `0.6.4` (`ghcr.io/jeefy/stand-in:0.6.4@sha256:11abda87cd135cf60e1c028ee1e35ccab9999cc206cdd8cc2971148bffa5e6c7`): fixes quadratic prefilter scans in the Go tokenizer that made 200 KB+ tool-output-heavy requests take minutes and hit the gateway timeout (stand-in#24).
+
 ## [0.4.0] - 2026-11-13
 
 ### Added
