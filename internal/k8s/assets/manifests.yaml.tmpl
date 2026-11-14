@@ -327,6 +327,8 @@ kind: Service
 metadata:
   name: agentgateway
   namespace: {{ .Namespace }}
+  labels:
+    app: agentgateway
 spec:
   selector:
     app: agentgateway
@@ -412,6 +414,8 @@ kind: Service
 metadata:
   name: stand-in
   namespace: {{ .Namespace }}
+  labels:
+    app: stand-in
 spec:
   selector:
     app: stand-in
@@ -499,6 +503,8 @@ kind: Service
 metadata:
   name: pinball
   namespace: {{ .Namespace }}
+  labels:
+    app: pinball
 spec:
   selector:
     app: pinball
@@ -997,4 +1003,83 @@ spec:
   selector:
     matchLabels:
       app: pinball
+{{- end }}
+{{- if .ServiceMonitor }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agentgateway
+  namespace: {{ .Namespace }}
+  labels:
+    app: agentgateway
+{{- range $k, $v := .ServiceMonitorLabelMap }}
+    {{ $k }}: {{ $v }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: agentgateway
+  endpoints:
+    - port: stats
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stand-in
+  namespace: {{ .Namespace }}
+  labels:
+    app: stand-in
+{{- range $k, $v := .ServiceMonitorLabelMap }}
+    {{ $k }}: {{ $v }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: stand-in
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pinball
+  namespace: {{ .Namespace }}
+  labels:
+    app: pinball
+{{- range $k, $v := .ServiceMonitorLabelMap }}
+    {{ $k }}: {{ $v }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: pinball
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-to-metrics
+  namespace: {{ .Namespace }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app, operator: In, values: [agentgateway, stand-in, pinball]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .MonitoringNamespace }}
+      ports:
+        - {protocol: TCP, port: 15020}
+        - {protocol: TCP, port: 9102}
+        - {protocol: TCP, port: 9201}
 {{- end }}

@@ -273,6 +273,8 @@ Image overrides (`--image-agentgateway`, `--image-standin`, `--image-pinball`, `
 
 `convergence stats` scrapes the Prometheus endpoints of agentgateway (`:15020`), Stand-In (`:9102`) and Pinball (`:9201`) and summarizes request counts, tokens, latency quantiles (p50/p90/p99), tier decisions and redactions. Counters reset when containers restart. It shows tokens and tiers, not money. `--json` prints machine-readable output; `--watch` refreshes.
 
+In cluster mode, `cluster install --service-monitor` renders prometheus-operator `ServiceMonitor`s for the three metrics ports plus a NetworkPolicy `allow-monitoring-to-metrics` that lets pods in `--monitoring-namespace` (default `monitoring`) scrape them through the default-deny policy. The monitors carry `release=prometheus-operator` unless you pass `--service-monitor-label key=value` (repeatable) to match your Prometheus `serviceMonitorSelector`. The flag fails before applying anything when the `servicemonitors.monitoring.coreos.com` CRD is absent.
+
 ## Insights
 
 `convergence insights` reads agentgateway's Postgres request log over a window (`--since 1d|7d|30d`, default `7d`) and reports:

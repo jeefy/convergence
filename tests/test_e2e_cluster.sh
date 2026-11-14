@@ -28,6 +28,32 @@ if command -v kubectl >/dev/null 2>&1; then
   echo "$OUTPUT" | kubectl apply --dry-run=client -f -
 fi
 
+echo "==> Testing 'cluster install --dry-run --service-monitor'..."
+SM_OUTPUT="$("$BIN" cluster install --dry-run --namespace="${NAMESPACE}" --copilot-token "ghp_$(printf 'a%.0s' $(seq 36))" \
+  --service-monitor --service-monitor-label release=kps --monitoring-namespace observability)"
+if [ "$(echo "$SM_OUTPUT" | grep -c 'kind: ServiceMonitor')" != "3" ]; then
+  echo "ERROR: expected 3 ServiceMonitors in rendered manifests"
+  exit 1
+fi
+for want in "release: kps" "name: allow-monitoring-to-metrics" "kubernetes.io/metadata.name: observability"; do
+  if ! echo "$SM_OUTPUT" | grep -q "$want"; then
+    echo "ERROR: --service-monitor render missing: $want"
+    exit 1
+  fi
+done
+if echo "$OUTPUT" | grep -q 'kind: ServiceMonitor'; then
+  echo "ERROR: ServiceMonitor rendered without --service-monitor"
+  exit 1
+fi
+if command -v kubectl >/dev/null 2>&1; then
+  echo "$SM_OUTPUT" | kubectl apply --dry-run=client -f - >/dev/null
+fi
+if "$BIN" cluster install --dry-run --namespace="${NAMESPACE}" --copilot-token "ghp_$(printf 'a%.0s' $(seq 36))" \
+  --service-monitor --service-monitor-label "not a label" >/dev/null 2>&1; then
+  echo "ERROR: invalid --service-monitor-label was accepted"
+  exit 1
+fi
+
 # Check if a live cluster is reachable
 if command -v kubectl >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1; then
   echo "==> Live Kubernetes cluster detected! Running in-cluster E2E test..."
@@ -72,6 +98,23 @@ direct:
   claude-sonnet-5.5: "openai:stub"
   claude-opus-5.5: "openai:stub"
 EOF
+
+  if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    echo "==> '--service-monitor' without the ServiceMonitor CRD must fail before applying anything..."
+    set +e
+    SM_ERR="$("$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
+      --models-file="${MODELS_FILE}" --no-backup --service-monitor 2>&1)"
+    SM_RC=$?
+    set -e
+    if [ "$SM_RC" -eq 0 ] || ! echo "$SM_ERR" | grep -q "servicemonitors.monitoring.coreos.com"; then
+      echo "ERROR: expected --service-monitor to fail with a CRD hint (rc=$SM_RC): $SM_ERR"
+      exit 1
+    fi
+    if kubectl -n "${NAMESPACE}" get deployment agentgateway >/dev/null 2>&1; then
+      echo "ERROR: --service-monitor failure still applied manifests"
+      exit 1
+    fi
+  fi
 
   echo "==> Deploying Convergence via 'convergence cluster install' (with in-cluster request-log postgres)..."
   PG_PASS="testpgpass123"

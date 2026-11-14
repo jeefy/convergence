@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-13
+
+### Added
+
+- Kubernetes: `cluster install --service-monitor` renders prometheus-operator ServiceMonitors for the agentgateway, Stand-In and Pinball metrics ports and a NetworkPolicy allowing scrapes from `--monitoring-namespace` (default `monitoring`). `--service-monitor-label key=value` (repeatable, default `release=prometheus-operator`) sets the labels your Prometheus `serviceMonitorSelector` matches. Install fails before applying when the ServiceMonitor CRD is missing.
+
 ## [0.4.1] - 2026-11-13
 
 ### Changed

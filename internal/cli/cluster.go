@@ -40,6 +40,9 @@ var clusterInstallCmd = &cobra.Command{
 		ptSecret, _ := cmd.Flags().GetString("passthrough-secret")
 		ingressHost, _ := cmd.Flags().GetString("ingress-host")
 		enablePDB, _ := cmd.Flags().GetBool("enable-pdb")
+		serviceMonitor, _ := cmd.Flags().GetBool("service-monitor")
+		smLabels, _ := cmd.Flags().GetStringArray("service-monitor-label")
+		monitoringNS, _ := cmd.Flags().GetString("monitoring-namespace")
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		imgAGW, _ := cmd.Flags().GetString("image-agentgateway")
 		imgStandIn, _ := cmd.Flags().GetString("image-standin")
@@ -69,6 +72,9 @@ var clusterInstallCmd = &cobra.Command{
 			PassthroughSecret:    ptSecret,
 			IngressHost:          ingressHost,
 			EnablePDB:            enablePDB,
+			ServiceMonitor:       serviceMonitor,
+			ServiceMonitorLabels: smLabels,
+			MonitoringNamespace:  monitoringNS,
 			DryRun:               dryRun,
 			ImageAgentGateway:    imgAGW,
 			ImageStandIn:         imgStandIn,
@@ -92,6 +98,11 @@ var clusterInstallCmd = &cobra.Command{
 		if dryRun {
 			fmt.Println(manifests)
 			return nil
+		}
+		if serviceMonitor {
+			if err := k8s.CheckServiceMonitorCRD(); err != nil {
+				return err
+			}
 		}
 
 		if noBackup, _ := cmd.Flags().GetBool("no-backup"); !noBackup {
@@ -199,6 +210,9 @@ func init() {
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")
 	clusterInstallCmd.Flags().Bool("enable-pdb", false, "Render PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball")
+	clusterInstallCmd.Flags().Bool("service-monitor", false, "Render prometheus-operator ServiceMonitors for gateway, stand-in and pinball metrics (needs the ServiceMonitor CRD)")
+	clusterInstallCmd.Flags().StringArray("service-monitor-label", nil, "key=value label on the ServiceMonitors so the Prometheus serviceMonitorSelector picks them up (repeatable; default release=prometheus-operator)")
+	clusterInstallCmd.Flags().String("monitoring-namespace", "monitoring", "Namespace whose pods may scrape the metrics ports (NetworkPolicy allow-monitoring-to-metrics)")
 	clusterInstallCmd.Flags().Bool("dry-run", false, "Output rendered YAML to stdout without applying")
 	clusterInstallCmd.Flags().String("image-agentgateway", "", "Override agentgateway image (tag or digest)")
 	clusterInstallCmd.Flags().String("extproc-timeout", "", "ext_proc requestTimeout as a Go duration (default 5s)")

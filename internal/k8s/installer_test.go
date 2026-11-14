@@ -603,3 +603,79 @@ func TestRequestLogRetention(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceMonitor(t *testing.T) {
+	base := func() *ClusterOptions {
+		return &ClusterOptions{Namespace: "sm-test", Provider: "direct", OpenAIKey: "sk-test"}
+	}
+
+	off, err := RenderManifests(base())
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+	if strings.Contains(off, "kind: ServiceMonitor") || strings.Contains(off, "allow-monitoring-to-metrics") {
+		t.Errorf("ServiceMonitor resources rendered without opts.ServiceMonitor")
+	}
+
+	opts := base()
+	opts.ServiceMonitor = true
+	on, err := RenderManifests(opts)
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+	if got := strings.Count(on, "kind: ServiceMonitor"); got != 3 {
+		t.Errorf("want 3 ServiceMonitors, got %d", got)
+	}
+	for _, want := range []string{
+		"    release: prometheus-operator\n",
+		"    - port: stats\n",
+		"    - port: metrics\n",
+		"    - port: http\n      path: /metrics\n",
+		"name: allow-monitoring-to-metrics",
+		"kubernetes.io/metadata.name: monitoring",
+		"kind: Service\nmetadata:\n  name: stand-in\n  namespace: sm-test\n  labels:\n    app: stand-in\n",
+	} {
+		if !strings.Contains(on, want) {
+			t.Errorf("rendered manifests missing %q", want)
+		}
+	}
+
+	opts = base()
+	opts.ServiceMonitor = true
+	opts.ServiceMonitorLabels = []string{"release=kps", "team=platform"}
+	opts.MonitoringNamespace = "observability"
+	custom, err := RenderManifests(opts)
+	if err != nil {
+		t.Fatalf("RenderManifests failed: %v", err)
+	}
+	for _, want := range []string{"    release: kps\n", "    team: platform\n", "kubernetes.io/metadata.name: observability"} {
+		if !strings.Contains(custom, want) {
+			t.Errorf("custom ServiceMonitor options missing %q", want)
+		}
+	}
+	if strings.Contains(custom, "prometheus-operator") {
+		t.Errorf("default label rendered despite explicit --service-monitor-label")
+	}
+
+	for _, bad := range []string{"nolabel", "bad label=x", "k=", "=v"} {
+		opts = base()
+		opts.ServiceMonitor = true
+		opts.ServiceMonitorLabels = []string{bad}
+		if _, err := RenderManifests(opts); err == nil {
+			t.Errorf("label %q accepted, want error", bad)
+		}
+	}
+}
+
+func TestCheckServiceMonitorCRDMissing(t *testing.T) {
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "kubectl")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho 'Error from server (NotFound): customresourcedefinitions.apiextensions.k8s.io \"servicemonitors.monitoring.coreos.com\" not found' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	err := CheckServiceMonitorCRD()
+	if err == nil || !strings.Contains(err.Error(), "kube-prometheus-stack") {
+		t.Fatalf("want CRD-missing error with hint, got %v", err)
+	}
+}

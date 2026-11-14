@@ -97,6 +97,7 @@ copilot-api and the OpenShell gateway are optional compose services with named v
 | NetworkPolicy | `default-deny-ingress` plus allow rules | Only the gateway reaches Stand-In, Pinball and copilot-api; only the gateway and optimizer reach Postgres |
 | Ingress | `agentgateway` | Only with `--ingress-host` |
 | PodDisruptionBudget | `agentgateway-pdb`, `stand-in-pdb`, `pinball-pdb` | Only with `--enable-pdb` |
+| ServiceMonitor + NetworkPolicy | `agentgateway`, `stand-in`, `pinball`, `allow-monitoring-to-metrics` | Only with `--service-monitor`; scrapes :15020, :9102, :9201 every 30s from `--monitoring-namespace` (default `monitoring`); labels from `--service-monitor-label` (default `release=prometheus-operator`); needs the prometheus-operator CRD |
 
 Omitted secrets (`--copilot-token`, Stand-In salt, Postgres password) are read back from the previous install's Secrets, so re-running `cluster install` does not rotate them.
 

@@ -44,8 +44,15 @@ type ClusterOptions struct {
 	ModelsFile          string // optional models.yaml override (same schema as ~/.convergence/models.yaml)
 	IngressHost         string // when set, renders an Ingress resource pointing to agentgateway:3000
 	EnablePDB           bool   // when true, renders PodDisruptionBudgets (minAvailable: 1) for gateway, stand-in, and pinball
-	PassthroughSecret   string // existing Secret whose keys are the passthrough api_key_env names
-	DryRun              bool
+	// ServiceMonitor renders prometheus-operator ServiceMonitors for the
+	// gateway, Stand-In and Pinball metrics ports plus a NetworkPolicy that
+	// lets pods in MonitoringNamespace scrape them. ServiceMonitorLabels
+	// ("key=value") must match the Prometheus serviceMonitorSelector.
+	ServiceMonitor       bool
+	ServiceMonitorLabels []string
+	MonitoringNamespace  string
+	PassthroughSecret    string // existing Secret whose keys are the passthrough api_key_env names
+	DryRun               bool
 
 	ImageAgentGateway string
 	ImageStandIn      string
@@ -73,6 +80,19 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	for _, q := range []string{opts.StandinCPURequest, opts.StandinCPULimit} {
 		if q != "" && !cpuQuantity.MatchString(q) {
 			return "", fmt.Errorf("invalid stand-in CPU quantity %q (want e.g. 200m or 2)", q)
+		}
+	}
+	if opts.ServiceMonitor {
+		if len(opts.ServiceMonitorLabels) == 0 {
+			opts.ServiceMonitorLabels = []string{"release=prometheus-operator"}
+		}
+		for _, l := range opts.ServiceMonitorLabels {
+			if !labelPair.MatchString(l) {
+				return "", fmt.Errorf("invalid --service-monitor-label %q (want key=value)", l)
+			}
+		}
+		if opts.MonitoringNamespace == "" {
+			opts.MonitoringNamespace = "monitoring"
 		}
 	}
 	switch opts.Provider {
@@ -241,6 +261,31 @@ func DeleteManifests(manifests string) error {
 // ExtProcTimeoutValue is the effective ext_proc requestTimeout for templates.
 func (o *ClusterOptions) ExtProcTimeoutValue() string {
 	return config.ExtProcTimeoutOrDefault(o.ExtProcTimeout)
+}
+
+// labelPair matches a Kubernetes label "key=value" (optional DNS prefix on the key).
+var labelPair = regexp.MustCompile(`^([a-z0-9A-Z]([-a-z0-9A-Z.]*[a-z0-9A-Z])?/)?[a-z0-9A-Z]([-a-z0-9A-Z_.]{0,61}[a-z0-9A-Z])?=[a-z0-9A-Z]([-a-z0-9A-Z_.]{0,61}[a-z0-9A-Z])?$`)
+
+// ServiceMonitorLabelMap splits ServiceMonitorLabels into key/value pairs for templates.
+func (o *ClusterOptions) ServiceMonitorLabelMap() map[string]string {
+	m := make(map[string]string, len(o.ServiceMonitorLabels))
+	for _, l := range o.ServiceMonitorLabels {
+		k, v, _ := strings.Cut(l, "=")
+		m[k] = v
+	}
+	return m
+}
+
+const serviceMonitorCRD = "servicemonitors.monitoring.coreos.com"
+
+// CheckServiceMonitorCRD fails when the prometheus-operator ServiceMonitor CRD
+// is not installed, so the whole apply does not abort halfway through.
+func CheckServiceMonitorCRD() error {
+	out, err := exec.Command("kubectl", "get", "crd", serviceMonitorCRD, "-o", "name").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("--service-monitor needs the prometheus-operator CRD %s, which this cluster does not have (install kube-prometheus-stack or drop the flag): %s", serviceMonitorCRD, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // cpuQuantity matches Kubernetes CPU quantities: whole/decimal cores or millicores.
