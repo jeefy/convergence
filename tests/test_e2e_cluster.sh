@@ -46,7 +46,14 @@ if echo "$OUTPUT" | grep -q 'kind: ServiceMonitor'; then
   exit 1
 fi
 if command -v kubectl >/dev/null 2>&1; then
-  echo "$SM_OUTPUT" | kubectl apply --dry-run=client -f - >/dev/null
+  if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    echo "$SM_OUTPUT" | kubectl apply --dry-run=client -f - >/dev/null
+  else
+    # Client dry-run needs REST mappings for CRD kinds; without the CRD (KinD in CI)
+    # validate everything except the ServiceMonitor documents.
+    echo "$SM_OUTPUT" | python3 -c 'import sys; print("---".join(d for d in sys.stdin.read().split("---") if "kind: ServiceMonitor" not in d))' \
+      | kubectl apply --dry-run=client -f - >/dev/null
+  fi
 fi
 if "$BIN" cluster install --dry-run --namespace="${NAMESPACE}" --copilot-token "ghp_$(printf 'a%.0s' $(seq 36))" \
   --service-monitor --service-monitor-label "not a label" >/dev/null 2>&1; then
@@ -101,11 +108,13 @@ EOF
 
   if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
     echo "==> '--service-monitor' without the ServiceMonitor CRD must fail before applying anything..."
+    trap - ERR
     set +e
     SM_ERR="$("$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
       --models-file="${MODELS_FILE}" --no-backup --service-monitor 2>&1)"
     SM_RC=$?
     set -e
+    trap on_err ERR
     if [ "$SM_RC" -eq 0 ] || ! echo "$SM_ERR" | grep -q "servicemonitors.monitoring.coreos.com"; then
       echo "ERROR: expected --service-monitor to fail with a CRD hint (rc=$SM_RC): $SM_ERR"
       exit 1

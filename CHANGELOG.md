@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-13
+
+### Fixed
+
+- Cluster e2e test: the `--service-monitor` render check no longer client-dry-runs ServiceMonitor documents on clusters without the prometheus-operator CRD (CI KinD), and the intentional CRD-missing failure no longer triggers the cluster-state dump.
+
 ## [0.4.2] - 2026-11-13
 
 ### Added
