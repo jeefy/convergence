@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/spf13/cobra"
 
 	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/k8s"
+	"github.com/jeefy/convergence/internal/prompts"
 )
 
 var clusterCmd = &cobra.Command{
@@ -35,6 +37,8 @@ var clusterInstallCmd = &cobra.Command{
 		otelProtocol, _ := cmd.Flags().GetString("otel-protocol")
 		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
 		patternsFile, _ := cmd.Flags().GetString("standin-patterns-file")
+		systemPrompt, _ := cmd.Flags().GetBool("system-prompt")
+		promptFile, _ := cmd.Flags().GetString("system-prompt-file")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
 		ptSecret, _ := cmd.Flags().GetString("passthrough-secret")
@@ -66,6 +70,7 @@ var clusterInstallCmd = &cobra.Command{
 			RequestLogRetention:  rlRetention,
 			FailOpen:             failOpen,
 			OTel:                 config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
+			SystemPrompt:         prompts.Settings{Enabled: systemPrompt},
 			StandinPatternsFile:  patternsFile,
 			OpenAIBaseURL:        openaiBase,
 			ModelsFile:           modelsFile,
@@ -83,6 +88,17 @@ var clusterInstallCmd = &cobra.Command{
 			ExtProcTimeout:       extProcTimeout,
 			StandinCPURequest:    standinCPURequest,
 			StandinCPULimit:      standinCPULimit,
+		}
+
+		if promptFile != "" {
+			if !systemPrompt {
+				return fmt.Errorf("--system-prompt-file needs --system-prompt")
+			}
+			extra, err := os.ReadFile(promptFile)
+			if err != nil {
+				return fmt.Errorf("reading --system-prompt-file: %w", err)
+			}
+			opts.SystemPrompt.Extra = string(extra)
 		}
 
 		k8s.ReuseExistingSecrets(opts)
@@ -206,6 +222,8 @@ func init() {
 	clusterInstallCmd.Flags().String("openai-base-url", "", "Base URL of an OpenAI-compatible endpoint for provider=direct (testing / self-hosted)")
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
 	clusterInstallCmd.Flags().String("passthrough-secret", "convergence-passthrough", "Existing Secret in the namespace whose keys are the passthrough api_key_env names")
+	clusterInstallCmd.Flags().Bool("system-prompt", false, "Prepend Convergence's default system prompt (behavioral guardrails) to every chat request (default: off)")
+	clusterInstallCmd.Flags().String("system-prompt-file", "", "File with extra system prompt lines, added after the defaults (needs --system-prompt)")
 	clusterInstallCmd.Flags().String("standin-patterns-file", "", "Stand-In patterns.yaml (replaces the image default; rendered into ConfigMap stand-in-patterns)")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")
 	clusterInstallCmd.Flags().String("ingress-host", "", "Host for an optional Ingress resource pointing to agentgateway:3000")

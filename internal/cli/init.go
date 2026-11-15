@@ -32,6 +32,8 @@ type initFlags struct {
 	failOpen     bool
 	requestLogDB string
 	otel         config.OTel
+	systemPrompt bool
+	promptFile   string
 	patternsFile string
 	ollamaLight  string
 	ollamaStd    string
@@ -180,6 +182,22 @@ func resolveConfig(cfg *config.Config, f initFlags, p *prompter) error {
 		cfg.OTel.Sample = f.otel.Sample
 	}
 	if err := cfg.OTel.Validate(); err != nil {
+		return err
+	}
+	if f.systemPrompt {
+		cfg.SystemPrompt.Enabled = true
+	}
+	if f.promptFile != "" {
+		extra, err := os.ReadFile(f.promptFile)
+		if err != nil {
+			return fmt.Errorf("reading --system-prompt-file: %w", err)
+		}
+		cfg.SystemPrompt.Extra = string(extra)
+		if !cfg.SystemPrompt.Enabled {
+			return fmt.Errorf("--system-prompt-file needs --system-prompt (or system_prompt.enabled in config.yaml)")
+		}
+	}
+	if err := cfg.SystemPrompt.Validate(); err != nil {
 		return err
 	}
 	if f.patternsFile != "" {
@@ -355,6 +373,8 @@ func init() {
 	f.StringVar(&initOpts.otel.Endpoint, "otel-endpoint", "", "Export OTLP traces to this collector host:port (default: off)")
 	f.StringVar(&initOpts.otel.Protocol, "otel-protocol", "", "OTLP protocol: grpc (default) or http")
 	f.Float64Var(&initOpts.otel.Sample, "otel-sample", 0, "Trace sampling rate 0..1 (default 1)")
+	f.BoolVar(&initOpts.systemPrompt, "system-prompt", false, "Prepend Convergence's default system prompt (behavioral guardrails) to every chat request (default: off; disable again with system_prompt.enabled: false in config.yaml)")
+	f.StringVar(&initOpts.promptFile, "system-prompt-file", "", "File with extra system prompt lines, added after the defaults (needs --system-prompt or system_prompt.enabled in config.yaml)")
 	f.StringVar(&initOpts.patternsFile, "standin-patterns-file", "", "Stand-In patterns.yaml to mount instead of the image default (replaces it, no merge)")
 	f.StringVar(&initOpts.ollamaLight, "ollama-model-light", "", "Ollama model for the light tier (default from 'convergence models')")
 	f.StringVar(&initOpts.ollamaStd, "ollama-model-standard", "", "Ollama model for the standard tier")
