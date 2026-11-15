@@ -14,6 +14,7 @@ import (
 
 	"github.com/jeefy/convergence/internal/config"
 	"github.com/jeefy/convergence/internal/models"
+	"github.com/jeefy/convergence/internal/prompts"
 )
 
 //go:embed assets/*
@@ -28,8 +29,9 @@ type ClusterOptions struct {
 	StandinSalt  string
 	OptimizerDSN string // when set, renders the optimizer CronJob + overlay PVC
 	OptSchedule  string
-	FailOpen     bool        // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
-	OTel         config.OTel // optional OTLP trace export
+	FailOpen     bool             // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
+	OTel         config.OTel      // optional OTLP trace export
+	SystemPrompt prompts.Settings // optional system prompt (request transformation on each model)
 	// RequestLogDB is an external Postgres DSN; RequestLogPostgres renders one in-cluster.
 	// Either enables agentgateway's request log (llm: full) and the optimizer CronJob.
 	RequestLogDB         string
@@ -72,6 +74,9 @@ const minRetention = 24 * time.Hour
 
 func RenderManifests(opts *ClusterOptions) (string, error) {
 	if err := opts.OTel.Validate(); err != nil {
+		return "", err
+	}
+	if err := opts.SystemPrompt.Validate(); err != nil {
 		return "", err
 	}
 	if err := config.ValidateExtProcTimeout(opts.ExtProcTimeout); err != nil {

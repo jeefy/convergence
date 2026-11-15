@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/prompts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -677,5 +678,54 @@ func TestCheckServiceMonitorCRDMissing(t *testing.T) {
 	err := CheckServiceMonitorCRD()
 	if err == nil || !strings.Contains(err.Error(), "kube-prometheus-stack") {
 		t.Fatalf("want CRD-missing error with hint, got %v", err)
+	}
+}
+
+func TestSystemPromptTransformation(t *testing.T) {
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct"}), "transformation:") {
+		t.Errorf("prompt transformation must not render by default")
+	}
+	sp := prompts.Settings{Enabled: true, Extra: "key: looks like yaml"}
+	mf := filepath.Join(t.TempDir(), "m.yaml")
+	if err := os.WriteFile(mf, []byte("passthrough:\n  gpt: {provider: openai, model: gpt-5}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k", ModelsFile: mf, SystemPrompt: sp, OptimizerDSN: "postgres://db/x"})
+	var parsed struct {
+		LLM struct {
+			Models []struct {
+				Name           string
+				Transformation map[string]string
+			}
+		} `yaml:"llm"`
+	}
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatalf("agentgateway config is not YAML: %v\n%s", err, c)
+	}
+	if len(parsed.LLM.Models) == 0 {
+		t.Fatalf("no models in:\n%s", c)
+	}
+	optTwins, passthrough := 0, false
+	for _, m := range parsed.LLM.Models {
+		passthrough = passthrough || m.Name == "gpt"
+		// optimizer replays come from the request log, which already holds the prompt
+		if strings.HasPrefix(m.Name, "opt-") {
+			optTwins++
+			if len(m.Transformation) != 0 {
+				t.Errorf("model %s: opt- twins must not prepend the prompt again", m.Name)
+			}
+			continue
+		}
+		for _, k := range []string{"messages", "system", "instructions"} {
+			if !strings.Contains(m.Transformation[k], sp.CELString()) {
+				t.Errorf("model %s: transformation %s missing prompt literal: %q", m.Name, k, m.Transformation[k])
+			}
+		}
+	}
+	if optTwins == 0 || !passthrough {
+		t.Errorf("expected opt- twin and passthrough models to be rendered (twins=%d passthrough=%v)", optTwins, passthrough)
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", SystemPrompt: prompts.Settings{Enabled: true, Extra: "$X"}}); err == nil {
+		t.Errorf("'$' in system prompt must fail")
 	}
 }

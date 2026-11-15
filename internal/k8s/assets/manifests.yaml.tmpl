@@ -203,10 +203,15 @@ stringData:
           visibility: internal
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
+{{- with $.SystemPrompt.YAMLTransformation 10 }}
+{{ . }}
+{{- end }}
 {{- end }}
 {{- if .OptimizerDSN }}
         # Public twins of the internal pinball-<id> models for the optimizer's
         # candidate replays (CronJob sets PINBALL_OPT_MODEL_PREFIX=opt-).
+        # No system prompt transformation here: replays are built from the
+        # request log, which already holds the prepended prompt.
 {{- range .Entries }}
         - name: opt-{{ .Name }}
           provider: {reference: {{ .Ref }}}
@@ -217,6 +222,9 @@ stringData:
         - name: {{ .Name }}
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
+{{- with $.SystemPrompt.YAMLTransformation 10 }}
+{{ . }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: v1
