@@ -138,6 +138,9 @@ func RenderAssetsWithSocket(cfg *config.Config, targetDir, engineName, socket st
 	if err := cfg.OTel.Validate(); err != nil {
 		return err
 	}
+	if err := cfg.SystemPrompt.Validate(); err != nil {
+		return err
+	}
 	res, err := models.ForConfig(cfg, targetDir)
 	if err != nil {
 		return err

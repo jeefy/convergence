@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/prompts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -493,4 +494,100 @@ func TestExtProcTimeoutRendered(t *testing.T) {
 	if !strings.Contains(ag, "requestTimeout: 60s") || strings.Contains(ag, "requestTimeout: 5s") {
 		t.Errorf("override must render requestTimeout: 60s:\n%s", ag)
 	}
+}
+
+// system_prompt renders a CEL request transformation on every model whose
+// embedded prompt literal decodes back to the exact configured text.
+func TestSystemPromptOffByDefaultAndRenderedWhenSet(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "transformation:") {
+		t.Errorf("prompt transformation must not render by default")
+	}
+	sp := prompts.Settings{Enabled: true, Extra: "key: looks like yaml\n- and a \"quoted\" list # with comment"}
+	_, files = render(t, func(c *config.Config) {
+		c.SystemPrompt = sp
+		c.RequestLogDB = "postgres://u:p@db/x"
+	})
+	ag := files["agentgateway.yaml"]
+	var parsed struct {
+		LLM struct {
+			Models []struct {
+				Name           string
+				Transformation map[string]string
+			}
+		} `yaml:"llm"`
+	}
+	if err := yaml.Unmarshal([]byte(ag), &parsed); err != nil {
+		t.Fatalf("rendered config is not YAML: %v\n%s", err, ag)
+	}
+	if len(parsed.LLM.Models) < 2 {
+		t.Fatalf("expected models in:\n%s", ag)
+	}
+	optTwins := 0
+	for _, m := range parsed.LLM.Models {
+		// optimizer replays come from the request log, which already holds the prompt
+		if strings.HasPrefix(m.Name, "opt-") {
+			optTwins++
+			if len(m.Transformation) != 0 {
+				t.Errorf("model %s: opt- twins must not prepend the prompt again", m.Name)
+			}
+			continue
+		}
+		for _, k := range []string{"messages", "system", "instructions"} {
+			if !strings.Contains(m.Transformation[k], sp.CELString()) {
+				t.Errorf("model %s: transformation %s missing prompt literal: %q", m.Name, k, m.Transformation[k])
+			}
+		}
+	}
+	if optTwins == 0 {
+		t.Errorf("expected opt- twin models to be rendered")
+	}
+	bad := config.DefaultConfig()
+	bad.StandinSalt = salt
+	bad.SystemPrompt = prompts.Settings{Enabled: true, Extra: "use $HOME"}
+	if err := RenderAssets(bad, t.TempDir()); err == nil {
+		t.Errorf("'$' in system prompt must be rejected")
+	}
+}
+
+// Passthrough models are served to clients like the tier models, so they get the prompt too.
+func TestSystemPromptOnPassthroughModels(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	y := "passthrough:\n  fable: {provider: copilot, model: claude-fable-5}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	cfg.SystemPrompt = prompts.Settings{Enabled: true}
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "agentgateway.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		LLM struct {
+			Models []struct {
+				Name           string
+				Transformation map[string]string
+			}
+		} `yaml:"llm"`
+	}
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("rendered config is not YAML: %v", err)
+	}
+	for _, m := range parsed.LLM.Models {
+		if m.Name != "fable" {
+			continue
+		}
+		for _, k := range []string{"messages", "system", "instructions"} {
+			if !strings.Contains(m.Transformation[k], cfg.SystemPrompt.CELString()) {
+				t.Errorf("passthrough model: transformation %s missing prompt literal: %q", k, m.Transformation[k])
+			}
+		}
+		return
+	}
+	t.Fatalf("passthrough model not rendered:\n%s", raw)
 }

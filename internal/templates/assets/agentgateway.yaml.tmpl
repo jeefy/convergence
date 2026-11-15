@@ -165,16 +165,23 @@ llm:
           targets:
             - {model: pinball-{{ .Models.TierModel "heavy" }}}
 
+  # system_prompt in config.yaml: a CEL request transformation on the served
+  # models prepends the configured text (OpenAI chat, Responses and Anthropic Messages).
   models:
 {{- range .Models.Models }}
     - name: pinball-{{ .PinballName }}
       visibility: internal
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
-{{ end }}
+{{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
+{{ . }}
+{{- end }}
+{{- end }}
 {{- if .Config.RequestLogDB }}
     # Public twins of the internal pinball-<id> models for `convergence optimize`
     # candidate replays (PINBALL_OPT_MODEL_PREFIX=opt-).
+    # No system_prompt transformation here: replays are built from the request
+    # log, which already holds the prepended prompt.
 {{- range .Models.Models }}
     - name: opt-{{ .PinballName }}
       provider: {reference: {{ providerRef .UpstreamProvider }}}
@@ -185,4 +192,7 @@ llm:
     - name: {{ .Name }}
       provider: {reference: {{ if .Endpoint }}{{ .Endpoint }}{{ else }}{{ providerRef .Provider }}{{ end }}}
       params: {model: {{ .Model }}}
+{{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
+{{ . }}
+{{- end }}
 {{- end }}
