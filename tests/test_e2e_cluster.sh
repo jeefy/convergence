@@ -127,10 +127,13 @@ EOF
 
   echo "==> Deploying Convergence via 'convergence cluster install' (with in-cluster request-log postgres)..."
   PG_PASS="testpgpass123"
+  PROMPT_FILE="$(mktemp)"
+  printf 'E2E-CLUSTER-PROMPT-LINE\n' >"${PROMPT_FILE}"
   "$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
     --models-file="${MODELS_FILE}" \
     --openai-base-url="http://stub-upstream.${STUB_NS}.svc.cluster.local:8080/v1" \
-    --request-log-postgres --request-log-postgres-password="${PG_PASS}"
+    --request-log-postgres --request-log-postgres-password="${PG_PASS}" \
+    --system-prompt --system-prompt-file="${PROMPT_FILE}"
 
   echo "==> Waiting for Deployments and StatefulSets..."
   kubectl -n "${NAMESPACE}" rollout status "statefulset/request-log-postgres" --timeout=300s
@@ -204,6 +207,22 @@ EOF
   if echo "$RECEIVED" | grep -qF "$TOKEN"; then echo "ERROR: raw token reached upstream" >&2; exit 1; fi
   echo "(b) response contains the original token"
   grep -qF "$TOKEN" /tmp/chat.out
+  echo "(c) --system-prompt: upstream request starts with one system message (defaults + file)"
+  echo "$RECEIVED" | python3 -c '
+import sys, json
+n = 0
+for l in sys.stdin:
+    l = l.strip()
+    if not l: continue
+    r = json.loads(l)
+    if "messages" not in r: continue
+    n += 1
+    m = r["messages"]
+    assert m[0]["role"] == "system" and "Trust only `git diff`" in m[0]["content"], m[0]
+    assert m[0]["content"].rstrip().endswith("E2E-CLUSTER-PROMPT-LINE"), m[0]
+    assert sum(1 for x in m if x["role"] == "system") == 1, m
+assert n >= 1, n
+'
 
   # Metrics are per replica: port-forward every pod of an app and sum the series.
   sum_metric() { # app port metric

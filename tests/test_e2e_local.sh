@@ -123,8 +123,15 @@ run_suite() {
   wait_for "stub upstream" 20 curl -sf "http://127.0.0.1:$sport/v1/models"
 
   echo "==> convergence init (provider ollama -> stub on host port $sport)"
+  local ptoken=""
   if "$BIN" init --help 2>&1 | grep -q -- '--yes'; then
-    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" "${compose_args[@]}"
+    # a token Stand-In would scrub in a user message: the system prompt is added after
+    # scrubbing, so it must reach the upstream verbatim (documented: keep secrets out of it)
+    ptoken="ghp_$(python3 -c 'import secrets,string; print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
+    printf 'prompt token %s\nE2E-EXTRA-PROMPT-LINE\n' "$ptoken" >"$TEST_HOME/extra-prompt.txt"
+    "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" "${compose_args[@]}" \
+      --system-prompt --system-prompt-file "$TEST_HOME/extra-prompt.txt"
+    grep -q '^system_prompt:' "$cfgdir/config.yaml" || fail "system_prompt not persisted in config.yaml"
   else
     printf '3\nhttp://host.docker.internal:%s\n' "$sport" | "$BIN" init
   fi
@@ -201,6 +208,57 @@ print(out)')"
   echo "$received" | grep -qF "$token" && fail "RAW token leaked to upstream"
   [ "$(echo "$received" | grep -c '<<secret-')" -ge 2 ] || fail "upstream did not receive placeholders in both requests: $received"
   echo "$received" | grep -q '"stream":true' || fail "upstream never saw the stream request"
+  # system_prompt: both chat requests must start with one system message holding defaults + extra
+  echo "$received" | python3 -c '
+import sys, json
+n = 0
+for l in sys.stdin:
+    l = l.strip()
+    if not l: continue
+    r = json.loads(l)
+    if "messages" not in r: continue
+    n += 1
+    m = r["messages"]
+    assert m[0]["role"] == "system", m[0]
+    assert "Trust only `git diff`" in m[0]["content"], m[0]
+    assert m[0]["content"].rstrip().endswith("E2E-EXTRA-PROMPT-LINE"), m[0]
+    assert sum(1 for x in m if x["role"] == "system") == 1, m
+assert n >= 2, n
+' || fail "upstream requests lack the prepended system prompt: $received"
+  echo "$received" | grep -qF "prompt token $ptoken" || fail "system prompt text was altered before reaching the upstream (expected: added after Stand-In)"
+
+  echo "==> Anthropic Messages API gets the system prompt in the system block"
+  # the ollama provider is OpenAI-compatible, so agentgateway converts /v1/messages into a
+  # Responses API call: the Anthropic system block arrives upstream as `instructions`
+  curl -sf -m 30 "http://127.0.0.1:$GW/v1/messages" -H 'Content-Type: application/json' -H 'anthropic-version: 2023-06-01' \
+    -d '{"model":"auto","max_tokens":32,"system":"CLIENT-SYSTEM","messages":[{"role":"user","content":"hello"}]}' >/dev/null \
+    || fail "anthropic messages request failed"
+  curl -sf "http://127.0.0.1:$sport/_received" | tail -n 1 | python3 -c '
+import sys, json
+r = json.loads(sys.stdin.read())
+ins = r.get("instructions", "")
+assert ins.startswith("Don" + chr(39) + "t trust work summaries"), r
+assert "E2E-EXTRA-PROMPT-LINE" in ins and ins.rstrip().endswith("CLIENT-SYSTEM"), r
+' || fail "anthropic request: system prompt not prepended to system block"
+
+  echo "==> Responses API gets the system prompt as instructions (null instructions included)"
+  curl -sf -m 30 "http://127.0.0.1:$GW/v1/responses" -H 'Content-Type: application/json' \
+    -d '{"model":"auto","instructions":null,"input":"hello"}' >/dev/null || fail "responses request failed"
+  curl -sf "http://127.0.0.1:$sport/_received" | tail -n 1 | python3 -c '
+import sys, json
+r = json.loads(sys.stdin.read())
+ins = r.get("instructions") or ""
+assert ins.startswith("Don" + chr(39) + "t trust work summaries") and ins.rstrip().endswith("E2E-EXTRA-PROMPT-LINE"), r
+' || fail "responses request: system prompt not set as instructions"
+
+  echo "==> Optimizer judge requests (x-agw-caller: eval-replay-judge) are not prepended"
+  curl -sf -m 30 "http://127.0.0.1:$GW/v1/chat/completions" -H 'Content-Type: application/json' -H 'x-agw-caller: eval-replay-judge' \
+    -d '{"model":"auto","messages":[{"role":"user","content":"judge probe"}]}' >/dev/null || fail "judge-caller request failed"
+  curl -sf "http://127.0.0.1:$sport/_received" | tail -n 1 | python3 -c '
+import sys, json
+r = json.loads(sys.stdin.read())
+assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["content"] == "judge probe", r
+' || fail "judge-caller request must reach the upstream without the system prompt"
 
   echo "==> Asserting metrics"
   sleep 1

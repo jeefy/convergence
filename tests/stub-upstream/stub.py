@@ -42,6 +42,16 @@ class H(BaseHTTPRequestHandler):
             req = json.loads(raw)
         except ValueError:
             return self._send(400, b'{"error":"bad json"}')
+        if self.path.rstrip("/").endswith("/responses"):
+            # OpenAI Responses API: agentgateway converts Anthropic /v1/messages into this
+            resp = {"id": "resp-stub", "object": "response", "created_at": 1, "status": "completed",
+                    "model": req.get("model", "stub"),
+                    "output": [{"type": "message", "id": "msg-stub", "status": "completed", "role": "assistant",
+                                "content": [{"type": "output_text", "text": "ok", "annotations": []}]}],
+                    "usage": {"input_tokens": 7, "output_tokens": 5, "total_tokens": 12,
+                              "input_tokens_details": {"cached_tokens": 0},
+                              "output_tokens_details": {"reasoning_tokens": 0}}}
+            return self._send(200, json.dumps(resp).encode())
         users = [m for m in req.get("messages", []) if m.get("role") == "user"]
         content = users[-1].get("content", "") if users else ""
         if isinstance(content, list):
