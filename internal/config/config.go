@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/jeefy/convergence/internal/prompts"
 )
 
 type ProviderType string
@@ -89,6 +91,9 @@ type Config struct {
 	RequestLogDB string `yaml:"request_log_db,omitempty"`
 	// OTel enables OTLP trace export (off unless otel.endpoint is set).
 	OTel OTel `yaml:"otel,omitempty"`
+	// SystemPrompt is prepended to every chat request by a request
+	// transformation on agentgateway's models. Off unless system_prompt.enabled is true.
+	SystemPrompt prompts.Settings `yaml:"system_prompt,omitempty"`
 	// StandinPatternsFile is an absolute host path to a Stand-In patterns.yaml; compose mounts it
 	// read-only and sets STANDIN_PATTERNS_FILE. Empty = the image default.
 	StandinPatternsFile string `yaml:"standin_patterns_file,omitempty"`
@@ -336,6 +341,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("validating config %s: %w", path, err)
 	}
 	if err := cfg.ValidateSkillScan(); err != nil {
+		return nil, fmt.Errorf("validating config %s: %w", path, err)
+	}
+	if err := cfg.SystemPrompt.Validate(); err != nil {
 		return nil, fmt.Errorf("validating config %s: %w", path, err)
 	}
 	if cfg.StandinSalt == "" {
