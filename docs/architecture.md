@@ -14,12 +14,15 @@ Every request to the gateway goes through the same four steps.
                                   │      scores the sanitized prompt, sets the model tier
                                   │      (light / standard / heavy) and target model
                                   │
-                                  │ 3. route to upstream
+                                  │ 3. (opt-in) system_prompt: CEL request transformation on
+                                  │      each model prepends the configured system prompt
+                                  │
+                                  │ 4. route to upstream
                                   │      copilot: copilot-api :4141 ──► GitHub Copilot
                                   │      direct:  api.openai.com / api.anthropic.com
                                   │      ollama:  Ollama (host.docker.internal:11434 by default)
                                   │
-                                  │ 4. ext_proc (response) ──► Stand-In
+                                  │ 5. ext_proc (response) ──► Stand-In
                                   │      tokens in the response are restored to the original values
                                   ▼
  [client / sandboxed agent] ◄── response
