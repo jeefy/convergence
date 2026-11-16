@@ -175,8 +175,18 @@ Only `copilot`, `direct` and `ollama` are valid provider keys, and only the thre
 ```yaml
 pinball:
   thresholds: {standard: 2, heavy: 4}
-  scoring: {tools: 0}   # keys: code, heavy_keyword, max_heavy_keywords, light_keyword, long_chars, long, very_long_chars, very_long, short_chars, short, tools, effort_high, effort_low, small_output_tokens, small_output, structured
+  scoring: {tools: 0}   # keys: code, heavy_keyword, max_heavy_keywords, light_keyword, long_chars, long, very_long_chars, very_long, short_chars, short, tools, effort_high, effort_low, small_output_tokens, small_output, structured, large_context_tokens, large_context, very_large_context_tokens, very_large_context
 ```
+
+`large_context_tokens` / `very_large_context_tokens` (Pinball 0.7.5+) add `large_context` / `very_large_context` points once the estimated prompt reaches that size; unset, the signal is off. `heavy_keywords` and `light_keywords` (lists of words, matched on word boundaries in user text) are rendered into Pinball's config when set, for example to add another language:
+
+```yaml
+pinball:
+  heavy_keywords: [refactor, "root cause", architektur, ursache]
+  light_keywords: [summarize, zusammenfassung, titel]
+```
+
+The generated Pinball config has no keyword lists unless you set them here, so without them no keyword is scored.
 
 **Local light tier.** Short prompts (titles, one-line questions) land in `light`. You can keep the heavier tiers on your cloud provider and serve `light` from a local Ollama model with the `ollama:` prefix, accepted for `copilot` and `direct`:
 

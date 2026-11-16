@@ -204,3 +204,38 @@ func TestPassthroughEndpointValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestPinballKeywordsAndContextScoring(t *testing.T) {
+	y := []byte("pinball:\n  scoring: {large_context_tokens: 60000, very_large_context_tokens: 120000}\n  heavy_keywords: [refactor, \"root cause\"]\n  light_keywords: [titel]\n")
+	p, err := ParsePinball(y)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ := Resolve(config.ProviderCopilot, nil)
+	if err := r.ApplyPinball(p); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(r.HeavyKeywordLines(), ","); got != `- "refactor",- "root cause"` {
+		t.Errorf("heavy lines %q", got)
+	}
+	if got := strings.Join(r.LightKeywordLines(), ","); got != `- "titel"` {
+		t.Errorf("light lines %q", got)
+	}
+	if got := strings.Join(r.ScoringLines(), ","); got != "large_context_tokens: 60000,very_large_context_tokens: 120000" {
+		t.Errorf("scoring lines %q", got)
+	}
+	for name, bad := range map[string]string{
+		"zero cutoff":    "pinball:\n  scoring: {large_context_tokens: 0}\n",
+		"very < large":   "pinball:\n  scoring: {large_context_tokens: 100, very_large_context_tokens: 50}\n",
+		"very w/o large": "pinball:\n  scoring: {very_large_context_tokens: 50}\n",
+	} {
+		p, err := ParsePinball([]byte(bad))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		r, _ := Resolve(config.ProviderCopilot, nil)
+		if r.ApplyPinball(p) == nil {
+			t.Errorf("%s: want error", name)
+		}
+	}
+}

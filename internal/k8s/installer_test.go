@@ -757,3 +757,16 @@ func TestCopilotSystemTextNormalised(t *testing.T) {
 		t.Errorf("non-Copilot models must not be rewritten")
 	}
 }
+
+func TestPinballKeywordsRenderedFromModelsFile(t *testing.T) {
+	f := modelsFile(t, "pinball:\n  heavy_keywords: [refactor]\n  light_keywords: [titel]\n  scoring: {large_context_tokens: 60000}\n")
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", CopilotToken: "t", ModelsFile: f})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"heavy_keywords:\n      - \"refactor\"", "light_keywords:\n      - \"titel\"", "large_context_tokens: 60000"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
