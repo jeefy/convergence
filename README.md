@@ -118,6 +118,8 @@ The OpenShell sandbox (`--sandbox openshell`, any provider including Copilot) ne
 
 Cluster mode supports `copilot` and `direct`.
 
+Copilot is reached through its chat completions API. For requests to Copilot models the gateway sends system text as plain-text `system` messages: Copilot ignored, for Claude models, system text sent as a list of content parts (how Anthropic `system` blocks are converted) and the `developer` role (how Responses API `instructions` are converted). Several system blocks are joined with a blank line.
+
 ## Model routing
 
 Pinball scores each request into a tier (`light`, `standard`, `heavy`). Convergence maps each tier to one pinball model, and each pinball model to an upstream model for your provider. `convergence models` shows the active mapping:
@@ -381,7 +383,7 @@ It applies to `/v1/chat/completions` (`messages[0]`, role `system`; a system mes
 
 The text is added when the request is handed to the model, after Stand-In has scrubbed the request and Pinball has picked a tier: it is not scrubbed (keep secrets out of it) and clients do not see it. It counts as input tokens on every request. It must be valid UTF-8 and must not contain `$` (agentgateway expands `$VAR` in its config) or control characters. `--system-prompt-file` needs `--system-prompt` or `system_prompt.enabled` in `config.yaml`; the setting is kept when `init` is re-run without the flags. With the request log enabled, logged prompts include this text; the optimizer's replays (`opt-` models) are built from those logs and are not prepended again. The optimizer's judge requests (`x-agw-caller: eval-replay-judge`) are exempt.
 
-`cluster install` does not remember the setting: pass the flags on every install. To turn it off locally, set `system_prompt.enabled: false` in `config.yaml` and run `convergence restart`. The prompt shapes model behavior; it is not an access control, and a client can avoid it.
+`cluster install` does not remember the setting: pass the flags on every install. To turn it off locally, run `convergence init --system-prompt=false` or set `system_prompt.enabled: false` in `config.yaml`, then `convergence restart`. The prompt shapes model behavior; it is not an access control, and a client can avoid it.
 
 ## Security model
 

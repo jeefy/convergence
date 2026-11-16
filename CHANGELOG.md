@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Unit tests set `USERPROFILE` next to `HOME` (`internal/testhome`) so running them on Windows no longer writes into the real profile; file-mode assertions are skipped there.
 - `install.sh` points Windows users at the zip asset in addition to WSL2.
 
+### Fixed
+
+- Copilot provider: system text sent as Anthropic `system` blocks or as Responses API `instructions` did not reach Claude models. agentgateway converts those to a system message with a list of content parts and to the `developer` role, and Copilot ignored both (observed with `claude-haiku-5.5` through copilot-api `v0.7.0`). Models served by Copilot now carry a `finalTransformation` that sends them as plain-text `system` messages. `tests/test_e2e_copilot.sh` checks all three APIs against the real provider.
+
 ## [0.4.3] - 2026-11-13
 
 ### Fixed

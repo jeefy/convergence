@@ -33,6 +33,8 @@ Failure behavior is set in the gateway config:
 - Stand-In ext_proc: `failureMode: failClosed` by default. If Stand-In is unreachable, requests are rejected. `init --fail-open` (local) or `cluster install --fail-open` switch it to `failOpen`, where requests continue **unscrubbed**.
 - Pinball ext_authz: `failureMode: allow`. If Pinball is unreachable, the request goes to the standard-tier model. Pinball only chooses a model, so this doesn't affect confidentiality.
 
+For Copilot models, a `finalTransformation` rewrites system text in the converted chat completions body to plain-text `system` messages (Copilot ignored content parts and the `developer` role for Claude models).
+
 Anthropic Messages requests (`/v1/messages`) are translated by agentgateway, so Claude Code and OpenAI-style clients share the same endpoint.
 
 ## Local mode (docker/podman compose)
