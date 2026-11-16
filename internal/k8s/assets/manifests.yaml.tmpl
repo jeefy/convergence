@@ -1,3 +1,8 @@
+{{- define "copilotSystem" }}
+          finalTransformation:
+            messages: |-
+              llmRequest.messages.map(m, m.role in ["system", "developer"] && has(m.content) && m.content != null ? {"role": "system", "content": type(m.content) == string ? m.content : m.content.filter(p, has(p.text)).map(p, p.text).join("\n\n")} : m)
+{{- end }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -197,12 +202,16 @@ stringData:
             conditional:
               targets:
                 - {model: pinball-{{ .R.TierModel "heavy" }}}
+      # Copilot models carry a finalTransformation on the converted chat completions
+      # body: Copilot ignores, for Claude models, a system message whose content is a
+      # list of parts and the developer role. Both become one plain-text system message.
       models:
 {{- range .Entries }}
         - name: pinball-{{ .Name }}
           visibility: internal
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
+{{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- with $.SystemPrompt.YAMLTransformation 10 }}
 {{ . }}
 {{- end }}
@@ -216,12 +225,14 @@ stringData:
         - name: opt-{{ .Name }}
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
+{{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- end }}
 {{- end }}
 {{- range .Passthrough }}
         - name: {{ .Name }}
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
+{{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- with $.SystemPrompt.YAMLTransformation 10 }}
 {{ . }}
 {{- end }}

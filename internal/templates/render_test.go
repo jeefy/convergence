@@ -591,3 +591,44 @@ func TestSystemPromptOnPassthroughModels(t *testing.T) {
 	}
 	t.Fatalf("passthrough model not rendered:\n%s", raw)
 }
+
+// Copilot ignores, for Claude models, system text sent as content parts or as
+// the developer role. Every model served by Copilot must normalise it; other
+// providers must be left alone.
+func TestCopilotSystemTextNormalised(t *testing.T) {
+	type parsedModels struct {
+		LLM struct {
+			Models []struct {
+				Name                string
+				Provider            struct{ Reference string }
+				FinalTransformation map[string]string `yaml:"finalTransformation"`
+			}
+		} `yaml:"llm"`
+	}
+	_, files := render(t, func(c *config.Config) {
+		c.Provider = config.ProviderCopilot
+		c.RequestLogDB = "postgres://db/x"
+	})
+	var p parsedModels
+	if err := yaml.Unmarshal([]byte(files["agentgateway.yaml"]), &p); err != nil {
+		t.Fatalf("rendered config is not YAML: %v", err)
+	}
+	if len(p.LLM.Models) < 6 {
+		t.Fatalf("expected tier models and opt- twins, got %d", len(p.LLM.Models))
+	}
+	for _, m := range p.LLM.Models {
+		expr := m.FinalTransformation["messages"]
+		if m.Provider.Reference != "copilot-completions" {
+			t.Fatalf("copilot render has model %s on %s", m.Name, m.Provider.Reference)
+		}
+		for _, want := range []string{`m.role in ["system", "developer"]`, `{"role": "system", "content":`, `.join("\n\n")`, "m.content != null"} {
+			if !strings.Contains(expr, want) {
+				t.Errorf("model %s: finalTransformation lacks %q: %q", m.Name, want, expr)
+			}
+		}
+	}
+	_, files = render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "finalTransformation:") {
+		t.Errorf("non-Copilot models must not be rewritten")
+	}
+}

@@ -165,14 +165,27 @@ llm:
           targets:
             - {model: pinball-{{ .Models.TierModel "heavy" }}}
 
+{{- define "copilotSystem" }}
+      finalTransformation:
+        messages: |-
+          llmRequest.messages.map(m, m.role in ["system", "developer"] && has(m.content) && m.content != null ? {"role": "system", "content": type(m.content) == string ? m.content : m.content.filter(p, has(p.text)).map(p, p.text).join("\n\n")} : m)
+{{- end }}
+
   # system_prompt in config.yaml: a CEL request transformation on the served
   # models prepends the configured text (OpenAI chat, Responses and Anthropic Messages).
+  #
+  # Copilot models carry a finalTransformation on the converted chat completions
+  # body: Copilot ignores, for Claude models, a system message whose content is a
+  # list of parts (how Anthropic system blocks are converted) and the developer
+  # role (how Responses instructions are converted). Both become one plain-text
+  # system message.
   models:
 {{- range .Models.Models }}
     - name: pinball-{{ .PinballName }}
       visibility: internal
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
+{{- if eq (providerRef .UpstreamProvider) "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
 {{ . }}
 {{- end }}
@@ -186,12 +199,14 @@ llm:
     - name: opt-{{ .PinballName }}
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
+{{- if eq (providerRef .UpstreamProvider) "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- end }}
 {{- end }}
 {{- range .Models.Passthrough }}
     - name: {{ .Name }}
       provider: {reference: {{ if .Endpoint }}{{ .Endpoint }}{{ else }}{{ providerRef .Provider }}{{ end }}}
       params: {model: {{ .Model }}}
+{{- if and (not .Endpoint) (eq (providerRef .Provider) "copilot-completions") }}{{ template "copilotSystem" }}{{ end }}
 {{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
 {{ . }}
 {{- end }}

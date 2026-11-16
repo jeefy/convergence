@@ -729,3 +729,31 @@ func TestSystemPromptTransformation(t *testing.T) {
 		t.Errorf("'$' in system prompt must fail")
 	}
 }
+
+// Models served by Copilot normalise system text to plain-text system messages; others do not.
+func TestCopilotSystemTextNormalised(t *testing.T) {
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "copilot", CopilotToken: "ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})
+	var parsed struct {
+		LLM struct {
+			Models []struct {
+				Name                string
+				FinalTransformation map[string]string `yaml:"finalTransformation"`
+			}
+		} `yaml:"llm"`
+	}
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatalf("agentgateway config is not YAML: %v\n%s", err, c)
+	}
+	if len(parsed.LLM.Models) == 0 {
+		t.Fatalf("no models in:\n%s", c)
+	}
+	for _, m := range parsed.LLM.Models {
+		expr := m.FinalTransformation["messages"]
+		if !strings.Contains(expr, `m.role in ["system", "developer"]`) || !strings.Contains(expr, `.join("\n\n")`) {
+			t.Errorf("model %s: missing system text normalisation: %q", m.Name, expr)
+		}
+	}
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k"}), "finalTransformation:") {
+		t.Errorf("non-Copilot models must not be rewritten")
+	}
+}
