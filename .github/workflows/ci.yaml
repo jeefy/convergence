@@ -70,7 +70,7 @@ jobs:
       - name: Test installer script
         run: pwsh -NoProfile -File tests/test_install.ps1
       - name: Unit tests (packages that run without a container engine)
-        run: go test -count=1 ./internal/clientconfig/... ./internal/config/... ./internal/models/... ./internal/doctor/... ./internal/templates/... ./internal/health/... ./internal/insights/... ./internal/skillscan/... ./internal/version/...
+        run: go test -count=1 ./internal/clientconfig/... ./internal/config/... ./internal/models/... ./internal/prompts/... ./internal/doctor/... ./internal/templates/... ./internal/health/... ./internal/insights/... ./internal/skillscan/... ./internal/version/...
 
   vulncheck:
     name: Vulnerability Scan
