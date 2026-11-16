@@ -3,6 +3,8 @@ package cli
 import (
 	"bufio"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -154,5 +156,48 @@ func TestInitComposeProviderErrors(t *testing.T) {
 				t.Fatalf("invalid provider must not save config: exists=%v, err=%v", exists, err)
 			}
 		})
+	}
+}
+
+// --system-prompt is saved in config.yaml: a re-run without the flag keeps it,
+// --system-prompt=false turns it off, and a prompt file needs the feature on.
+func TestResolveConfig_systemPrompt(t *testing.T) {
+	base := initFlags{yes: true, provider: "direct", openAIKey: "key"}
+	file := filepath.Join(t.TempDir(), "p.txt")
+	if err := os.WriteFile(file, []byte("extra line\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(cfg *config.Config, mutate func(*initFlags)) error {
+		f := base
+		mutate(&f)
+		return resolveConfig(cfg, f, newPrompter("", true))
+	}
+
+	cfg := config.DefaultConfig()
+	if err := run(cfg, func(f *initFlags) { f.systemPrompt, f.systemPromptSet, f.promptFile = true, true, file }); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SystemPrompt.Enabled || cfg.SystemPrompt.Extra != "extra line\n" {
+		t.Fatalf("flags not applied: %+v", cfg.SystemPrompt)
+	}
+	if err := run(cfg, func(*initFlags) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SystemPrompt.Enabled || cfg.SystemPrompt.Extra != "extra line\n" {
+		t.Errorf("re-run without flags must keep the setting: %+v", cfg.SystemPrompt)
+	}
+	if err := run(cfg, func(f *initFlags) { f.systemPrompt, f.systemPromptSet = false, true }); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SystemPrompt.Enabled {
+		t.Errorf("--system-prompt=false must turn the setting off")
+	}
+	if err := run(config.DefaultConfig(), func(f *initFlags) { f.promptFile = file }); err == nil {
+		t.Errorf("--system-prompt-file without the feature enabled must fail")
+	}
+	if err := run(config.DefaultConfig(), func(f *initFlags) {
+		f.systemPrompt, f.systemPromptSet, f.promptFile = true, true, filepath.Join(t.TempDir(), "missing")
+	}); err == nil {
+		t.Errorf("a missing prompt file must fail")
 	}
 }

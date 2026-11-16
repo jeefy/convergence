@@ -50,6 +50,13 @@ local_variant otel-http --provider ollama --ollama-url http://host.docker.intern
 printf 'Prefer small commits.\nkey: value # looks like yaml\n' >"$WORK/extra-prompt.txt"
 local_variant system-prompt --provider ollama --ollama-url http://host.docker.internal:11434 \
   --system-prompt --system-prompt-file "$WORK/extra-prompt.txt"
+# --system-prompt=false on a re-run turns the saved setting off again
+export HOME="$WORK/home-system-prompt"
+"$BIN" init --yes --engine "$ENGINE" --provider ollama --ollama-url http://host.docker.internal:11434 >/dev/null
+grep -q 'transformation:' "$HOME/.convergence/agentgateway.yaml" || fail "re-init without flags dropped the system prompt"
+"$BIN" init --yes --engine "$ENGINE" --provider ollama --ollama-url http://host.docker.internal:11434 --system-prompt=false >/dev/null
+if grep -q 'transformation:' "$HOME/.convergence/agentgateway.yaml"; then fail "--system-prompt=false did not turn the system prompt off"; fi
+export HOME="$ORIG_HOME"
 local_variant request-log-db --provider ollama --ollama-url http://host.docker.internal:11434 \
   --request-log-db 'postgres://u:pw@db:5432/ag'
 
