@@ -74,6 +74,34 @@ with urllib.request.urlopen(req, timeout=30) as r:
 echo "Response received: $RESP"
 echo "$RESP" | grep -q '"choices"' || fail "Invalid chat completions response from gateway: $RESP"
 
+echo "==> Client system text reaches the model on all three APIs"
+# Copilot ignores, for Claude models, a system message sent as content parts and the
+# developer role, which is how Anthropic system blocks and Responses instructions are
+# converted. The gateway sends plain-text system messages instead; a rule in the
+# client's system text must therefore show up in the reply.
+GW="$GW" python3 -c '
+import json, os, sys, urllib.request
+gw, canary = os.environ["GW"], "ZEBRA-7341"
+rule = "End every reply with the exact text %s." % canary
+ask = "Reply with one short sentence about the sea."
+cases = [
+    ("chat completions", "/v1/chat/completions", {"model": "auto", "max_tokens": 80, "messages": [{"role": "system", "content": rule}, {"role": "user", "content": ask}]}),
+    ("anthropic messages (system blocks)", "/v1/messages", {"model": "auto", "max_tokens": 80, "system": [{"type": "text", "text": rule}], "messages": [{"role": "user", "content": ask}]}),
+    ("responses (instructions)", "/v1/responses", {"model": "auto", "max_output_tokens": 200, "instructions": rule, "input": ask}),
+]
+failed = False
+for name, path, body in cases:
+    req = urllib.request.Request("http://127.0.0.1:%s%s" % (gw, path), data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        raw = r.read().decode()
+    ok = canary in raw
+    failed = failed or not ok
+    print("%s %s" % ("ok  " if ok else "MISS", name))
+    if not ok:
+        print("     reply: %s" % raw[:300])
+sys.exit(1 if failed else 0)
+' || fail "a client system prompt did not reach the model on every API"
+
 echo "==> Checking that metrics incremented"
 sleep 1
 curr_matches="$(metric $STANDIN standin_matches_total)"
