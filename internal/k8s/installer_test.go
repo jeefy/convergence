@@ -432,7 +432,7 @@ func TestOTelTracing(t *testing.T) {
 		t.Errorf("tracing must not render without otel endpoint")
 	}
 	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OTel: config.OTel{Endpoint: "otel.mon.svc:4317"}})
-	for _, want := range []string{"frontendPolicies:", "host: otel.mon.svc:4317", "protocol: grpc", `service.name: '"convergence"'`} {
+	for _, want := range []string{"frontendPolicies:", "host: otel.mon.svc:4317", "protocol: grpc", `service.name: '"convergence"'`, `pinball.est_tokens: 'default(string(extauthz.est_tokens), "")'`} {
 		if !strings.Contains(c, want) {
 			t.Errorf("missing %q in:\n%s", want, c)
 		}

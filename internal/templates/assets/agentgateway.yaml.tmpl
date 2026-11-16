@@ -40,6 +40,7 @@ frontendPolicies:
       pinball.model: 'default(extauthz.model, "")'
       pinball.reason: 'default(extauthz.reason, "")'
       pinball.score: 'default(string(extauthz.score), "")'
+      pinball.est_tokens: 'default(string(extauthz.est_tokens), "")'
 {{- end }}
 
 gateways:
