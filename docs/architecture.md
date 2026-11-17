@@ -114,7 +114,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 |---|---|
 | agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2` |
 | Stand-In | `ghcr.io/jeefy/stand-in:0.6.4@sha256:11abda87cd135cf60e1c028ee1e35ccab9999cc206cdd8cc2971148bffa5e6c7` |
-| Pinball | `ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee` |
+| Pinball | `ghcr.io/jeefy/pinball:0.7.7@sha256:7b610b1426eb4667a60930967c91dd2bab5540f4dd70e75ff8a4dbe6ee2d3881` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29` |
 | openshell | `ghcr.io/nvidia/openshell/gateway:latest` (not pinned) |
 | SkillSpector | built locally by `skills build` as `localhost/convergence-skillspector:v2.13.4` from commit `54824463814a0be01360792523ec7245a69190fc` |
