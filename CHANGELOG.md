@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- Release: the winget publisher failed with `function "envOrDefault" not defined` because GoReleaser only accepts a bare `{{ .Env.NAME }}` for `repository.token`. The v0.5.0 archives, checksums and SBOMs were published; the winget submission was not.
+
 ## [0.5.0] - 2026-11-17
 
 ### Added
