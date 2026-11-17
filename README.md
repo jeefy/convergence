@@ -225,7 +225,10 @@ Local: export `OLLAMA_CLOUD_KEY` when running `init`, `restart` or `upgrade`; it
 | Continue | `convergence config continue` | `~/.continue/config.json` |
 | Zed | `convergence config zed` | `~/.config/zed/settings.json` |
 | Cline / Roo Code | `convergence config cline` | `~/.config/Code/User/settings.json` |
+| Paseo | `convergence config paseo` | `config.json` in `$PASEO_HOME`, else `~/.paseo` |
 | Anything else | `convergence config copilot` | Nothing. Prints `OPENAI_*` / `ANTHROPIC_*` exports to `eval` in your shell. |
+
+[Paseo](https://paseo.sh) launches other agents, so `config paseo` adds two providers under `agents.providers` and leaves the built-in ones alone: `convergence-claude` (extends `claude`: gateway base URL, Claude Code's haiku/sonnet/opus slots mapped to `light`/`standard`/`heavy`, `WebSearch` disallowed because Anthropic's server-side tools are not available through the gateway) and `convergence-opencode` (extends `opencode`, lists the `convergence/*` models, so it also needs `convergence config opencode`). The Claude provider offers `auto`, the three tiers and, for the local stack, the `passthrough:` names from `models.yaml`. Run the command on the machine where the Paseo daemon runs, then `paseo reload`. A `config.json` it creates is mode `0600`; an existing one keeps its mode.
 
 ## CLI reference
 

@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `convergence config paseo`: adds providers `convergence-claude` (extends `claude`) and `convergence-opencode` (extends `opencode`) under `agents.providers` in Paseo's `config.json` (`$PASEO_HOME`, else `~/.paseo`). The built-in providers are not changed. The Claude provider maps Claude Code's haiku/sonnet/opus slots to `light`/`standard`/`heavy`, disallows `WebSearch` and lists `auto`, the tiers and the local `models.yaml` passthrough names. A created file is `0600`. Covered by `tests/test_e2e_local.sh`.
+
 ### Fixed
 
 - Release: the winget publisher failed with `function "envOrDefault" not defined` because GoReleaser only accepts a bare `{{ .Env.NAME }}` for `repository.token`. The v0.5.0 archives, checksums and SBOMs were published; the winget submission was not.

@@ -94,6 +94,8 @@ run_suite() {
   echo; echo "################ engine: $engine ################"
   TEST_HOME="$(mktemp -d -t convergence-e2e-XXXXXX)"
   export HOME="$TEST_HOME"
+  # Never the real Paseo daemon config, also when run from a Paseo agent.
+  export PASEO_HOME="$TEST_HOME/.paseo"
   local cfgdir="$TEST_HOME/.convergence"
   local compose_args=()
   local original_docker_host="${DOCKER_HOST-}" docker_host_set="${DOCKER_HOST+x}"
@@ -307,6 +309,18 @@ assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["cont
   bin_has "claude-code" config list || fail "config list missing claude-code"
   "$BIN" config claude-code restore >/dev/null
   if [ -e "$cc" ]; then grep -q "localhost\|127.0.0.1" "$cc" && fail "restore left the Convergence keys"; fi
+
+  echo "==> config paseo: new providers in \$PASEO_HOME/config.json, 0600, restore"
+  local pc="$PASEO_HOME/config.json"
+  bin_has 'config opencode' config paseo || fail "config paseo did not warn about the missing OpenCode provider"
+  grep -q '"convergence-claude"' "$pc" || fail "paseo config lacks the convergence-claude provider"
+  grep -q '"convergence-opencode"' "$pc" || fail "paseo config lacks the convergence-opencode provider"
+  grep -q "\"ANTHROPIC_BASE_URL\": \"http://localhost:$GW\"" "$pc" || fail "paseo claude provider not pointed at the gateway root"
+  [ "$(stat -c %a "$pc" 2>/dev/null || stat -f %Lp "$pc")" = 600 ] || fail "paseo config.json is not 0600"
+  bin_has 'already up to date' config paseo || fail "config paseo not idempotent"
+  "$BIN" config list | grep -q 'paseo .*convergence=true' || fail "config list does not show paseo as configured"
+  "$BIN" config paseo restore >/dev/null
+  [ ! -e "$pc" ] || fail "config paseo restore left a file it created"
 
   echo "==> skills: scan needs the image, build it, scan upstream fixtures"
   local skills="$TEST_HOME/.claude/skills" scan_out

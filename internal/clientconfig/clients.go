@@ -21,9 +21,12 @@ const Key = "convergence"
 // (e.g. http://localhost:3000); a trailing /v1 is tolerated and removed.
 type Options struct {
 	GatewayURL string
-	SetDefault bool
-	DryRun     bool
-	Force      bool
+	// Passthrough are extra model names the gateway serves (models.yaml
+	// `passthrough:`), offered by writers that list models per provider.
+	Passthrough []string
+	SetDefault  bool
+	DryRun      bool
+	Force       bool
 }
 
 type setOp struct {
@@ -39,6 +42,9 @@ type client struct {
 	ops     func(o Options, root string) []setOp
 	pointed func(doc map[string]any) bool
 	note    string
+	// mode is the permission of a file we create (default 0644); an existing
+	// file keeps its own.
+	mode os.FileMode
 }
 
 func Root(u string) string {
@@ -62,6 +68,28 @@ func HermesHome(h string) string {
 		return filepath.Join(h, "AppData", "Local", "hermes")
 	}
 	return filepath.Join(h, ".hermes")
+}
+
+// PaseoHome mirrors Paseo's own lookup: $PASEO_HOME, else ~/.paseo.
+func PaseoHome(h string) string {
+	if d := strings.TrimSpace(os.Getenv("PASEO_HOME")); d != "" {
+		return d
+	}
+	return filepath.Join(h, ".paseo")
+}
+
+// Paseo provider ids added under agents.providers.
+const (
+	PaseoClaude   = Key + "-claude"
+	PaseoOpenCode = Key + "-opencode"
+)
+
+func paseoModel(id, label string, def bool) map[string]any {
+	m := map[string]any{"id": id, "label": label}
+	if def {
+		m["isDefault"] = true
+	}
+	return m
 }
 
 var clients = []client{
@@ -272,6 +300,54 @@ var clients = []client{
 			return lookupString(d, "cline.openAiApiKey") == Key
 		},
 		note: "Configures VS Code User settings for Cline / Roo Code with provider openai-compatible and model auto.",
+	},
+	{
+		name:   "paseo",
+		format: JSON,
+		mode:   0o600, // config.json also holds the daemon password hash and provider env
+		path:   func(h string) string { return filepath.Join(PaseoHome(h), "config.json") },
+		ops: func(o Options, root string) []setOp {
+			claude := []any{
+				paseoModel("auto", "Convergence Auto", true),
+				paseoModel("light", "Convergence Light", false),
+				paseoModel("standard", "Convergence Standard", false),
+				paseoModel("heavy", "Convergence Heavy", false),
+			}
+			for _, n := range o.Passthrough {
+				claude = append(claude, paseoModel(n, n+" (passthrough)", false))
+			}
+			return []setOp{
+				{path: []string{"agents", "providers", PaseoClaude}, val: map[string]any{
+					"extends": "claude",
+					"label":   "Convergence (Claude Code)",
+					// Claude Code appends /v1/messages itself: base URL must not end in /v1.
+					"env": map[string]any{
+						"ANTHROPIC_BASE_URL":             root,
+						"ANTHROPIC_AUTH_TOKEN":           Key,
+						"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "light",
+						"ANTHROPIC_DEFAULT_SONNET_MODEL": "standard",
+						"ANTHROPIC_DEFAULT_OPUS_MODEL":   "heavy",
+					},
+					// Anthropic's server-side tools are not available through the gateway.
+					"disallowedTools": []any{"WebSearch"},
+					"models":          claude,
+				}},
+				{path: []string{"agents", "providers", PaseoOpenCode}, val: map[string]any{
+					"extends": "opencode",
+					"label":   "Convergence (OpenCode)",
+					"models": []any{
+						paseoModel(Key+"/auto", "Convergence Auto", true),
+						paseoModel(Key+"/pinball", "Convergence Pinball", false),
+						paseoModel(Key+"/light", "Convergence Light", false),
+						paseoModel(Key+"/standard", "Convergence Standard", false),
+						paseoModel(Key+"/heavy", "Convergence Heavy", false),
+					},
+				}},
+			}
+		},
+		pointed: func(d map[string]any) bool { _, ok := lookup(d, "agents", "providers", PaseoClaude); return ok },
+		note: "Adds providers " + PaseoClaude + " and " + PaseoOpenCode + "; the built-in providers are untouched. " +
+			"Run `paseo reload` to apply. " + PaseoOpenCode + " needs `convergence config opencode` as well.",
 	},
 }
 

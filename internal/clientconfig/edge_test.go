@@ -264,7 +264,7 @@ func TestReadManifestUnreadableAndCommitErrors(t *testing.T) {
 	if _, err := readManifest(p); err == nil {
 		t.Error("expected read error")
 	}
-	if err := commit(p, nil, false, []byte("{}"), nil); err == nil {
+	if err := commit(p, nil, false, []byte("{}"), nil, 0o644); err == nil {
 		t.Error("commit should surface manifest error")
 	}
 	if _, _, err := readOptional(d); err == nil {

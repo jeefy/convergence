@@ -1,13 +1,17 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/jeefy/convergence/internal/clientconfig"
 	"github.com/jeefy/convergence/internal/config"
+	"github.com/jeefy/convergence/internal/models"
 )
 
 var configCmd = &cobra.Command{
@@ -24,14 +28,43 @@ type configFlags struct {
 
 func (f configFlags) options() (clientconfig.Options, error) {
 	url := f.gatewayURL
+	var passthrough []string
 	if url == "" {
 		cfg, err := config.LoadConfig()
 		if err != nil {
 			return clientconfig.Options{}, err
 		}
 		url = fmt.Sprintf("http://localhost:%d", cfg.GatewayPort)
+		if passthrough, err = localPassthrough(); err != nil {
+			return clientconfig.Options{}, err
+		}
 	}
-	return clientconfig.Options{GatewayURL: url, SetDefault: f.setDefault, DryRun: f.dryRun, Force: f.force}, nil
+	return clientconfig.Options{GatewayURL: url, Passthrough: passthrough, SetDefault: f.setDefault, DryRun: f.dryRun, Force: f.force}, nil
+}
+
+// localPassthrough lists the passthrough model names of the local stack
+// (models.yaml). With --gateway-url the gateway's models are not known here.
+func localPassthrough() ([]string, error) {
+	dir, err := config.GetConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, models.FileName))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading models.yaml: %w", err)
+	}
+	pt, err := models.ParsePassthrough(data)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(pt))
+	for i, p := range pt {
+		names[i] = p.Name
+	}
+	return names, nil
 }
 
 func runClient(cmd *cobra.Command, name string, args []string, f configFlags) error {
@@ -156,5 +189,17 @@ omo.jsonc to "convergence/auto" or "convergence/pinball".`))
 	addClientCmd("continue", "Add Convergence to Continue (~/.continue/config.yaml)", nil, nil)
 	addClientCmd("zed", "Point Zed (~/.config/zed/settings.json) at Convergence", nil, nil)
 	addClientCmd("cline", "Point Cline/Roo Code (~/.config/Code/User/settings.json) at Convergence", nil, nil)
+	addClientCmd("paseo", "Add `convergence-claude` and `convergence-opencode` providers to Paseo (config.json in $PASEO_HOME, else ~/.paseo)",
+		nil, func(cmd *cobra.Command) {
+			sts, err := clientconfig.List()
+			if err != nil {
+				return
+			}
+			for _, s := range sts {
+				if s.Client == "opencode" && !s.Pointed {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Warning: OpenCode has no `convergence` provider yet, so %s has no models to run. Run: convergence config opencode\n", clientconfig.PaseoOpenCode)
+				}
+			}
+		})
 	rootCmd.AddCommand(configCmd)
 }
