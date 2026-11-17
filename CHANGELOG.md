@@ -14,12 +14,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Bump pinned Pinball image to `0.7.7` (`ghcr.io/jeefy/pinball:0.7.7@sha256:7b610b1426eb4667a60930967c91dd2bab5540f4dd70e75ff8a4dbe6ee2d3881`): the optimizer reads agentgateway 1.6.0 request-log payloads. With `0.7.6` every optimizer run against a 1.6.0 request log ended with `samples: 0`.
 - `doctor` no longer fails the `config` check on Windows for the `.env` file mode (NTFS has no POSIX mode).
 - Unit tests set `USERPROFILE` next to `HOME` (`internal/testhome`) so running them on Windows no longer writes into the real profile; file-mode assertions are skipped there.
 - `install.sh` points Windows users at the zip asset in addition to WSL2.
 
 ### Fixed
 
+- Request log: the `x-agw-caller` request header is now stored as `request_logs.agentgateway_user` (agentgateway `config.standardAttributes.user`). The column stayed empty, so the optimizer's per-caller results and its `eval-*` caller exclusion had nothing to work with. Rendered only when the request log is enabled.
 - Copilot provider: system text sent as Anthropic `system` blocks or as Responses API `instructions` did not reach Claude models. agentgateway converts those to a system message with a list of content parts and to the `developer` role, and Copilot ignored both (observed with `claude-haiku-5.5` through copilot-api `v0.7.0`). Models served by Copilot now carry a `finalTransformation` that sends them as plain-text `system` messages. `tests/test_e2e_copilot.sh` checks all three APIs against the real provider.
 
 ## [0.4.3] - 2026-11-13
