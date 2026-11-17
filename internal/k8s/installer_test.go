@@ -757,3 +757,22 @@ func TestCopilotSystemTextNormalised(t *testing.T) {
 		t.Errorf("non-Copilot models must not be rewritten")
 	}
 }
+
+// With the request log on, the x-agw-caller header is stored as request_logs.agentgateway_user.
+func TestRequestLogRecordsCaller(t *testing.T) {
+	var parsed struct {
+		Config struct {
+			StandardAttributes struct{ User string } `yaml:"standardAttributes"`
+		}
+	}
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k", RequestLogDB: "postgres://db/x"})
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatalf("agentgateway config is not YAML: %v", err)
+	}
+	if want := `default(request.headers["x-agw-caller"], null)`; parsed.Config.StandardAttributes.User != want {
+		t.Errorf("standardAttributes.user = %q, want %q", parsed.Config.StandardAttributes.User, want)
+	}
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k"}), "standardAttributes:") {
+		t.Errorf("standardAttributes must only render with the request log")
+	}
+}

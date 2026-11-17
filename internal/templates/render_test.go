@@ -632,3 +632,25 @@ func TestCopilotSystemTextNormalised(t *testing.T) {
 		t.Errorf("non-Copilot models must not be rewritten")
 	}
 }
+
+// With the request log on, the x-agw-caller header is stored as
+// request_logs.agentgateway_user, which Pinball's optimizer and insights read.
+func TestRequestLogRecordsCaller(t *testing.T) {
+	type parsed struct {
+		Config struct {
+			StandardAttributes struct{ User string } `yaml:"standardAttributes"`
+		}
+	}
+	_, files := render(t, func(c *config.Config) { c.RequestLogDB = "postgres://db/x" })
+	var p parsed
+	if err := yaml.Unmarshal([]byte(files["agentgateway.yaml"]), &p); err != nil {
+		t.Fatalf("rendered config is not YAML: %v", err)
+	}
+	if want := `default(request.headers["x-agw-caller"], null)`; p.Config.StandardAttributes.User != want {
+		t.Errorf("standardAttributes.user = %q, want %q", p.Config.StandardAttributes.User, want)
+	}
+	_, files = render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "standardAttributes:") {
+		t.Errorf("standardAttributes must only render with the request log")
+	}
+}

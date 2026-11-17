@@ -4,6 +4,12 @@
 config:
   statsAddr: 0.0.0.0:15020
   connectionTerminationDeadline: 600s
+{{- if .Config.RequestLogDB }}
+  # request_logs.agentgateway_user: the caller a client names in x-agw-caller.
+  # Pinball's optimizer (per-caller results, eval-* exclusion) and insights read it.
+  standardAttributes:
+    user: 'default(request.headers["x-agw-caller"], null)'
+{{- end }}
   logging:
     format: json
 {{- if .Config.RequestLogDB }}

@@ -182,7 +182,7 @@ EOF
   TOKEN="ghp_$(python3 -c 'import secrets,string;print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
   chat() {
     curl -s -D /tmp/chat.hdr -o /tmp/chat.out -w '%{http_code}' -X POST http://localhost:13000/v1/chat/completions \
-      -H 'Content-Type: application/json' \
+      -H 'Content-Type: application/json' -H 'x-agw-caller: e2e-cluster' \
       -d "{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"my token is ${TOKEN} please echo\"}]}" || true
   }
 
@@ -272,6 +272,16 @@ assert n >= 1, n
   insights_json="$("$BIN" insights --db-dsn="${PG_DSN}" --since=1d --json)"
   echo "${insights_json}" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_requests"] > 0'
   echo "Insights query and JSON verification passed!"
+
+  echo "==> Request log records the x-agw-caller header as agentgateway_user..."
+  callers=""
+  for _ in $(seq 1 20); do
+    callers="$(kubectl -n "${NAMESPACE}" exec statefulset/request-log-postgres -- psql -U convergence -d agentgateway -At \
+      -c "select count(*) from request_logs where agentgateway_user = 'e2e-cluster'" 2>/dev/null || true)"
+    [ "${callers:-0}" -ge 1 ] 2>/dev/null && break
+    sleep 1
+  done
+  [ "${callers:-0}" -ge 1 ] || { echo "ERROR: no request_logs row with agentgateway_user=e2e-cluster (got '${callers}')" >&2; exit 1; }
 
   echo "==> Fail-closed: scale stand-in to 0; request must not reach upstream unscrubbed..."
   BEFORE="$(curl -sf http://localhost:${STUB_PORT}/_received | wc -l)"
