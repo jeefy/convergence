@@ -6,7 +6,7 @@ It wires together:
 
 - [agentgateway](https://agentgateway.dev/docs/) (`v1.6.0`): the gateway. Serves an OpenAI-compatible `/v1` endpoint (Anthropic Messages requests are translated) and forwards to your provider.
 - [Stand-In](https://github.com/jeefy/stand-in) (`0.6.4`): an `ext_proc` filter that replaces secrets in prompts with opaque tokens and restores them in responses.
-- [Pinball](https://github.com/jeefy/pinball) (`0.7.7`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
+- [Pinball](https://github.com/jeefy/pinball) (`0.8.0`): an `ext_authz` service that scores each sanitized request and picks a model tier (`light`, `standard`, `heavy`).
 - An optional sandbox for the agent itself: [NVIDIA OpenShell](https://github.com/NVIDIA/OpenShell), [nono](https://github.com/nolabs-ai/nono), [Docker Sandboxes](https://docs.docker.com/engine/security/sandboxes/) (`sbx`) or Kubernetes [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox). Convergence starts the agent inside it with inference routed through the gateway.
 
 ```

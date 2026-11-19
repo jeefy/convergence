@@ -9,7 +9,7 @@ import (
 )
 
 // Pinball is the optional `pinball:` block of models.yaml: overrides for
-// pinball's thresholds and scoring (pinball 0.7.7 schema). Unset keys keep
+// pinball's thresholds and scoring (pinball 0.8.0 schema). Unset keys keep
 // pinball's own defaults.
 type Pinball struct {
 	Thresholds struct {
@@ -111,7 +111,7 @@ func (r *Resolved) ScoringLines() []string {
 	return out
 }
 
-// Keyword lists from pinball 0.7.7's packaged pinball.yaml. A mounted config
+// Keyword lists from pinball 0.8.0's packaged pinball.yaml. A mounted config
 // replaces the packaged one whole, so they are rendered to keep keyword scoring.
 var (
 	heavyKeywords = []string{

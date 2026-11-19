@@ -4,9 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-19
+
 ### Added
 
 - `convergence config paseo`: adds providers `convergence-claude` (extends `claude`) and `convergence-opencode` (extends `opencode`) under `agents.providers` in Paseo's `config.json` (`$PASEO_HOME`, else `~/.paseo`). The built-in providers are not changed. The Claude provider maps Claude Code's haiku/sonnet/opus slots to `light`/`standard`/`heavy`, disallows `WebSearch` and lists `auto`, the tiers and the local `models.yaml` passthrough names. A created file is `0600`. Covered by `tests/test_e2e_local.sh`.
+
+### Changed
+
+- Bump pinned Pinball image to `0.8.0` (`ghcr.io/jeefy/pinball:0.8.0@sha256:62550d3a0df6119168adee301d268b4a368d000f456c91109471b9fda53a28c4`). Pinball 0.8.0 can build its pool from the upstream `/v1/models` (`PINBALL_DISCOVERY_URL`); Convergence does not enable it yet, so routing uses the rendered pool as before. It also skips a model that cannot serve the request's API shape or `reasoning_effort` (only when the pool carries that data, which the rendered pool does not).
 
 ### Fixed
 
@@ -248,7 +254,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jeefy/convergence/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jeefy/convergence/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/jeefy/convergence/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/jeefy/convergence/compare/v0.4.1...v0.4.2
