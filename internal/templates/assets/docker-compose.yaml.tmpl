@@ -72,6 +72,9 @@ services:
     restart: unless-stopped
     volumes:
       - ./pinball.yaml:/etc/pinball/pinball.yaml:ro{{ .VolumeSuffix }}
+    environment:
+      # Without it pinball ignores the mount and serves its packaged pool.
+      PINBALL_CONFIG: /etc/pinball/pinball.yaml
     ports:
       - "{{ .Config.BindAddress }}:{{ .Ports.Pinball }}:9201"
     healthcheck:

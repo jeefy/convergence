@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Local stack: the compose `pinball` service did not set `PINBALL_CONFIG`, so Pinball ignored the mounted `pinball.yaml` and served its packaged model pool, thresholds and keywords. `models.yaml` overrides and `pinball:` settings never reached it. The service now sets `PINBALL_CONFIG`. The rendered `pinball.yaml` (local and the Kubernetes `pinball-config` ConfigMap) now includes Pinball 0.7.7's `heavy_keywords` and `light_keywords`, because a mounted file replaces the packaged one whole and the Kubernetes deployment was routing without keyword scoring. Covered by `tests/test_e2e_local.sh`.
 - Release: the winget publisher failed with `function "envOrDefault" not defined` because GoReleaser only accepts a bare `{{ .Env.NAME }}` for `repository.token`. The v0.5.0 archives, checksums and SBOMs were published; the winget submission was not.
 
 ## [0.5.0] - 2026-11-17

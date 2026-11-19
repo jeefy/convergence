@@ -269,6 +269,14 @@ data:
       {{ . }}
 {{- end }}
 {{- end }}
+    heavy_keywords:
+{{- range .R.HeavyKeywords }}
+      - {{ . }}
+{{- end }}
+    light_keywords:
+{{- range .R.LightKeywords }}
+      - {{ . }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment

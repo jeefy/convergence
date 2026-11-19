@@ -654,3 +654,19 @@ func TestRequestLogRecordsCaller(t *testing.T) {
 		t.Errorf("standardAttributes must only render with the request log")
 	}
 }
+
+// pinball falls back to its packaged pool unless PINBALL_CONFIG names the mounted file,
+// so models.yaml overrides would be ignored. Keyword lists must be rendered: the mounted
+// file replaces the packaged one, keywords included.
+func TestPinballLoadsRenderedConfig(t *testing.T) {
+	_, files := render(t, func(*config.Config) {})
+	if !strings.Contains(files[ComposeFile], "PINBALL_CONFIG: /etc/pinball/pinball.yaml") {
+		t.Error("pinball service must set PINBALL_CONFIG to the mounted pinball.yaml")
+	}
+	pb := files["pinball.yaml"]
+	for _, want := range []string{"heavy_keywords:", "  - architecture", "  - race condition", "light_keywords:", "  - tl;dr"} {
+		if !strings.Contains(pb, want) {
+			t.Errorf("pinball.yaml missing %q:\n%s", want, pb)
+		}
+	}
+}

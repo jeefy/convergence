@@ -17,3 +17,11 @@ scoring:
   {{ . }}
 {{- end }}
 {{- end }}
+heavy_keywords:
+{{- range .Models.HeavyKeywords }}
+  - {{ . }}
+{{- end }}
+light_keywords:
+{{- range .Models.LightKeywords }}
+  - {{ . }}
+{{- end }}

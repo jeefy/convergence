@@ -168,6 +168,15 @@ run_suite() {
   pr="$(curl -sf -X POST "http://127.0.0.1:$PINBALL/check" -H 'Content-Type: application/json' \
     -d '{"model":"auto","messages":[{"role":"user","content":"How do I debug this distributed security race condition?"}]}')"
   echo "$pr" | grep -q model || fail "unexpected pinball response: $pr"
+  # pinball must serve the rendered pinball.yaml (PINBALL_CONFIG), not its packaged pool
+  local plog
+  plog="$("$BIN" logs pinball 2>&1)" || fail "logs pinball failed"
+  echo "$plog" | grep -qF "tiers={'light': ['claude-haiku-5.5'], 'standard': ['claude-sonnet-5.5'], 'heavy': ['claude-opus-5.5']}" \
+    || fail "pinball did not load the rendered pinball.yaml: $(echo "$plog" | grep 'pinball starting' | tail -1)"
+  # rendered keyword lists are live: one heavy keyword scores kw:<word>
+  pr="$(curl -sf -X POST "http://127.0.0.1:$PINBALL/check" -H 'Content-Type: application/json' \
+    -d '{"model":"auto","messages":[{"role":"user","content":"please investigate this"}]}')"
+  echo "$pr" | grep -q 'kw:investigate' || fail "rendered heavy_keywords not applied: $pr"
 
   echo "==> Baseline stats (before real traffic)"
   local base_matches base_restored base_dec

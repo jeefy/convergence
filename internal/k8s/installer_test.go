@@ -776,3 +776,15 @@ func TestRequestLogRecordsCaller(t *testing.T) {
 		t.Errorf("standardAttributes must only render with the request log")
 	}
 }
+
+func TestPinballConfigHasKeywords(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"    heavy_keywords:", "      - architecture", "    light_keywords:", "      - tl;dr"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("pinball-config missing %q", want)
+		}
+	}
+}
