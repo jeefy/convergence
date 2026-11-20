@@ -141,6 +141,9 @@ func RenderAssetsWithSocket(cfg *config.Config, targetDir, engineName, socket st
 	if err := cfg.SystemPrompt.Validate(); err != nil {
 		return err
 	}
+	if cfg.DiscoverModels && cfg.Provider == config.ProviderDirect {
+		return fmt.Errorf("discover_models needs provider copilot or ollama: direct has no single model list for pinball")
+	}
 	res, err := models.ForConfig(cfg, targetDir)
 	if err != nil {
 		return err
@@ -250,4 +253,19 @@ func providerRef(family string) (string, error) {
 		return "anthropic-direct", nil
 	}
 	return "", fmt.Errorf("unknown upstream family %q", family)
+}
+
+// DiscoveryURL is the upstream /v1/models Pinball discovers its pool from
+// ("" unless discover_models is set).
+func (c RenderContext) DiscoveryURL() string {
+	if c.Config == nil || !c.Config.DiscoverModels {
+		return ""
+	}
+	switch c.Config.Provider {
+	case config.ProviderCopilot:
+		return "http://copilot-api:4141/v1/models"
+	case config.ProviderOllama:
+		return strings.TrimRight(c.Config.OllamaURL, "/") + "/v1/models"
+	}
+	return ""
 }

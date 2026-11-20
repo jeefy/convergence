@@ -788,3 +788,39 @@ func TestPinballConfigHasKeywords(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoverModels(t *testing.T) {
+	off, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"PINBALL_DISCOVERY", "pinball-live", "discovery-cache"} {
+		if strings.Contains(off, s) {
+			t.Errorf("renders %q without --discover-models", s)
+		}
+	}
+	const dsn = "postgres://u:pw@db:5432/ag" //nolint:gosec // fake DSN fixture
+	on, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", DiscoverModels: true, RequestLogDB: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"http://copilot-api.x.svc.cluster.local:4141/v1/models",
+		"/var/cache/pinball/discovery.json",
+		"name: discovery-cache",
+		"model: pinball-live",
+		`- name: "opt-*"`,
+		`- name: "*"`,
+	} {
+		if !strings.Contains(on, want) {
+			t.Errorf("manifests missing %q", want)
+		}
+	}
+	if strings.Contains(on, "- name: opt-claude") {
+		t.Error("copilot opt- twins duplicate the opt-* route")
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", DiscoverModels: true}); err == nil ||
+		!strings.Contains(err.Error(), "discover-models needs --provider copilot") {
+		t.Errorf("direct + --discover-models: err = %v", err)
+	}
+}

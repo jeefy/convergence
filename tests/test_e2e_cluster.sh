@@ -125,6 +125,23 @@ EOF
     fi
   fi
 
+  echo "==> '--discover-models' with provider direct must fail before applying anything..."
+  trap - ERR
+  set +e
+  DM_ERR="$("$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
+    --models-file="${MODELS_FILE}" --no-backup --discover-models 2>&1)"
+  DM_RC=$?
+  set -e
+  trap on_err ERR
+  if [ "$DM_RC" -eq 0 ] || ! echo "$DM_ERR" | grep -q "discover-models needs --provider copilot"; then
+    echo "ERROR: expected --discover-models to be refused for provider direct (rc=$DM_RC): $DM_ERR"
+    exit 1
+  fi
+  if kubectl -n "${NAMESPACE}" get deployment agentgateway >/dev/null 2>&1; then
+    echo "ERROR: --discover-models refusal still applied manifests"
+    exit 1
+  fi
+
   echo "==> Deploying Convergence via 'convergence cluster install' (with in-cluster request-log postgres)..."
   PG_PASS="testpgpass123"
   PROMPT_FILE="$(mktemp)"
