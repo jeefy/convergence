@@ -48,7 +48,7 @@ otel:
   sample: 1                  # 0..1, default 1
 ```
 
-Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request and response model, input and output tokens), `caller` (from the `x-agw-caller` request header) and, for `model: auto` requests, `pinball.tier`, `pinball.model`, `pinball.reason` and `pinball.score`. Traces carry metadata only, never prompts or completions. agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`, which can break OTLP delivery. From a container, reach a collector on the host as `host.docker.internal:4317`.
+Spans use `service.name=convergence` and carry agentgateway's `gen_ai.*` attributes (operation, provider, request and response model, input and output tokens), `caller` (from the `x-agw-caller` request header) and, for `model: auto` requests, `pinball.tier`, `pinball.model`, `pinball.reason`, `pinball.score` and `pinball.est_tokens`. Traces carry metadata only, never prompts or completions. agentgateway's exporter honors `HTTP_PROXY`/`HTTPS_PROXY`, which can break OTLP delivery. From a container, reach a collector on the host as `host.docker.internal:4317`.
 
 ## Troubleshooting
 

@@ -721,3 +721,14 @@ func TestDiscoverModels(t *testing.T) {
 		t.Errorf("direct + discover_models: err = %v", err)
 	}
 }
+
+func TestTracingCarriesPinballScoreAndEstTokens(t *testing.T) {
+	_, files := render(t, func(c *config.Config) {
+		c.OTel = config.OTel{Endpoint: "localhost:4317"}
+	})
+	for _, k := range []string{`pinball.score: 'default(string(extauthz.score), "")'`, `pinball.est_tokens: 'default(string(extauthz.est_tokens), "")'`} {
+		if !strings.Contains(files["agentgateway.yaml"], k) {
+			t.Errorf("tracing attributes missing %s", k)
+		}
+	}
+}
