@@ -2,7 +2,7 @@
 
 ## Request flow
 
-Every request to the gateway goes through the same four steps.
+Every request to the gateway goes through the same steps.
 
 ```
  [client / sandboxed agent] ──► agentgateway :3000 /v1
@@ -75,7 +75,6 @@ Secrets live only in `config.yaml` and `.env`. The rendered files are world-read
 | `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
 | `skill-scan.json` | user | Cached result of the last `skills scan` |
 | `backups/` | user | Request-log dumps taken by `cluster install` before an upgrade (last 5) |
-| `logs/` | 0700 | Gateway access logs |
 
 copilot-api and the OpenShell gateway are optional compose services with named volumes `copilot-data` and `openshell-data`. `convergence uninstall --purge` deletes the whole directory.
 
@@ -114,7 +113,7 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 |---|---|
 | agentgateway | `cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2` |
 | Stand-In | `ghcr.io/jeefy/stand-in:0.6.4@sha256:11abda87cd135cf60e1c028ee1e35ccab9999cc206cdd8cc2971148bffa5e6c7` |
-| Pinball | `ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee` |
+| Pinball | `ghcr.io/jeefy/pinball:0.8.0@sha256:62550d3a0df6119168adee301d268b4a368d000f456c91109471b9fda53a28c4` |
 | copilot-api | `ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29` |
 | openshell | `ghcr.io/nvidia/openshell/gateway:latest` (not pinned) |
 | SkillSpector | built locally by `skills build` as `localhost/convergence-skillspector:v2.13.4` from commit `54824463814a0be01360792523ec7245a69190fc` |
@@ -123,4 +122,4 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 
 ## Model mapping
 
-`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See [Model routing](../README.md#model-routing) in the README.
+`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See [Providers and model routing](models.md).

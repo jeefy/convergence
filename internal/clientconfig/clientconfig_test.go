@@ -51,6 +51,11 @@ var fixtures = []fixture{
 		"{\n  // vscode config\n  \"editor.fontSize\": 14\n}\n",
 		[]string{"// vscode config", `"editor.fontSize": 14`},
 		[]string{`"cline.openAiBaseUrl": "http://localhost:3000/v1"`, `"cline.openAiApiKey": "convergence"`}, nil},
+	{"paseo", ".paseo/config.json",
+		"{\n  \"daemon\": {\"listen\": \"127.0.0.1:6767\"},\n  \"agents\": {\"providers\": {\"claude\": {\"env\": {\"FOO\": \"bar\"}}}}\n}\n",
+		[]string{`"listen": "127.0.0.1:6767"`, `"claude": {"env": {"FOO": "bar"}}`},
+		[]string{`"convergence-claude"`, `"extends": "claude"`, `"ANTHROPIC_BASE_URL": "http://localhost:3000"`,
+			`"ANTHROPIC_DEFAULT_HAIKU_MODEL": "light"`, `"convergence-opencode"`, `"id": "convergence/auto"`}, nil},
 	{"openclaw", ".openclaw/openclaw.json",
 		"{\n  // my comment\n  \"agents\": {\"defaults\": {\"model\": {\"primary\": \"x/y\"}}},\n  \"models\": {\"providers\": {\"other\": {\"api\": \"x\",},},},\n}\n",
 		[]string{"// my comment", `"primary": "x/y"`, `"other": {"api": "x",}`},
@@ -299,5 +304,64 @@ func TestOpenClawDefaultModelOnlyWithFlag(t *testing.T) {
 	}
 	if read(t, p) != f.existing {
 		t.Error("round trip after set-default not exact")
+	}
+}
+
+func TestPaseoHomeModeAndPassthrough(t *testing.T) {
+	h := t.TempDir()
+	testhome.Set(t, h)
+	d := filepath.Join(h, "elsewhere")
+	t.Setenv("PASEO_HOME", d)
+	p := filepath.Join(d, "config.json")
+	o := Options{GatewayURL: gw + "/v1", Passthrough: []string{"glm-5.2"}}
+	if _, err := Configure("paseo", o); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, p)
+	for _, w := range []string{`"id": "glm-5.2"`, `"ANTHROPIC_BASE_URL": "http://localhost:3000"`, `"isDefault": true`} {
+		if !strings.Contains(got, w) {
+			t.Errorf("missing %q in:\n%s", w, got)
+		}
+	}
+	// The passthrough model is offered for Claude Code only: OpenCode knows
+	// just the models `config opencode` wrote.
+	if strings.Contains(got, `"convergence/glm-5.2"`) {
+		t.Error("passthrough model listed for the opencode provider")
+	}
+	if runtime.GOOS != "windows" {
+		st, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o600 {
+			t.Errorf("fresh paseo config mode = %o, want 600", st.Mode().Perm())
+		}
+	}
+
+	// An existing file keeps its own mode.
+	t.Setenv("PASEO_HOME", "")
+	p = filepath.Join(h, ".paseo", "config.json")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("{}\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Configure("paseo", o); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if st, _ := os.Stat(p); st.Mode().Perm() != 0o640 {
+			t.Errorf("existing paseo config mode = %o, want 640", st.Mode().Perm())
+		}
+	}
+	sts, err := List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sts {
+		if s.Client == "paseo" && (!s.Pointed || s.Path != p) {
+			t.Errorf("paseo status = %+v", s)
+		}
 	}
 }

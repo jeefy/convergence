@@ -38,6 +38,7 @@ var clusterInstallCmd = &cobra.Command{
 		otelSample, _ := cmd.Flags().GetFloat64("otel-sample")
 		patternsFile, _ := cmd.Flags().GetString("standin-patterns-file")
 		systemPrompt, _ := cmd.Flags().GetBool("system-prompt")
+		discover, _ := cmd.Flags().GetBool("discover-models")
 		promptFile, _ := cmd.Flags().GetString("system-prompt-file")
 		openaiBase, _ := cmd.Flags().GetString("openai-base-url")
 		modelsFile, _ := cmd.Flags().GetString("models-file")
@@ -71,6 +72,7 @@ var clusterInstallCmd = &cobra.Command{
 			FailOpen:             failOpen,
 			OTel:                 config.OTel{Endpoint: otelEndpoint, Protocol: otelProtocol, Sample: otelSample},
 			SystemPrompt:         prompts.Settings{Enabled: systemPrompt},
+			DiscoverModels:       discover,
 			StandinPatternsFile:  patternsFile,
 			OpenAIBaseURL:        openaiBase,
 			ModelsFile:           modelsFile,
@@ -223,6 +225,7 @@ func init() {
 	_ = clusterInstallCmd.Flags().MarkHidden("openai-base-url")
 	clusterInstallCmd.Flags().String("passthrough-secret", "convergence-passthrough", "Existing Secret in the namespace whose keys are the passthrough api_key_env names")
 	clusterInstallCmd.Flags().Bool("system-prompt", false, "Prepend Convergence's default system prompt (behavioral guardrails) to every chat request (default: off)")
+	clusterInstallCmd.Flags().Bool("discover-models", false, "Let Pinball build its model pool from copilot-api's /v1/models (provider copilot; the static pool stays the fallback and the light/standard/heavy aliases)")
 	clusterInstallCmd.Flags().String("system-prompt-file", "", "File with extra system prompt lines, added after the defaults (needs --system-prompt)")
 	clusterInstallCmd.Flags().String("standin-patterns-file", "", "Stand-In patterns.yaml (replaces the image default; rendered into ConfigMap stand-in-patterns)")
 	clusterInstallCmd.Flags().String("models-file", "", "models.yaml override file (same schema as ~/.convergence/models.yaml) for the tier->upstream model mapping")

@@ -89,6 +89,10 @@ type Config struct {
 	// `convergence optimize`. Empty = off. Logging is "full", so the database
 	// holds prompts and completions: treat the DSN and the database as secret.
 	RequestLogDB string `yaml:"request_log_db,omitempty"`
+	// DiscoverModels lets Pinball build its pool from the upstream's /v1/models
+	// (copilot-api or Ollama) instead of the static three-model pool, which
+	// stays as the fallback and the light/standard/heavy aliases. Not for direct.
+	DiscoverModels bool `yaml:"discover_models,omitempty"`
 	// OTel enables OTLP trace export (off unless otel.endpoint is set).
 	OTel OTel `yaml:"otel,omitempty"`
 	// SystemPrompt is prepended to every chat request by a request

@@ -49,15 +49,15 @@ type Resolved struct {
 	// Scoring holds optional pinball scoring overrides (models.yaml `pinball.scoring`).
 	Scoring map[string]int
 	// HeavyKeywords and LightKeywords come from models.yaml `pinball.heavy_keywords` /
-	// `pinball.light_keywords`; empty means pinball scores no keywords.
-	HeavyKeywords, LightKeywords []string
+	// `pinball.light_keywords`; nil renders pinball's defaults, empty turns the signal off.
+	HeavyKeywords, LightKeywords *[]string
 	// Fallback is the PinballName used when pinball is unreachable.
 	Fallback string
 	// Passthrough are fixed-name models without Pinball (models.yaml `passthrough:`).
 	Passthrough []Passthrough
 }
 
-// Thresholds are pinball's score cutoffs (pinball 0.7.6 schema).
+// Thresholds are pinball's score cutoffs (pinball 0.8.0 schema).
 type Thresholds struct{ Standard, Heavy int }
 
 // Overrides represents models.yaml configuration.

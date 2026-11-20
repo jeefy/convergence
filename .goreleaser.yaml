@@ -64,7 +64,9 @@ winget:
       owner: jeefy
       name: winget-pkgs
       branch: convergence-{{ .Version }}
-      token: '{{ envOrDefault "WINGET_GITHUB_TOKEN" "" }}'
+      # GoReleaser accepts only a bare {{ .Env.NAME }} here. It is read after the
+      # skip_upload check above, so an unset token never reaches it.
+      token: "{{ .Env.WINGET_GITHUB_TOKEN }}"
       pull_request:
         enabled: true
         base:

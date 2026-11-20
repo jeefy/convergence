@@ -758,13 +758,80 @@ func TestCopilotSystemTextNormalised(t *testing.T) {
 	}
 }
 
+// With the request log on, the x-agw-caller header is stored as request_logs.agentgateway_user.
+func TestRequestLogRecordsCaller(t *testing.T) {
+	var parsed struct {
+		Config struct {
+			StandardAttributes struct{ User string } `yaml:"standardAttributes"`
+		}
+	}
+	c := cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k", RequestLogDB: "postgres://db/x"})
+	if err := yaml.Unmarshal([]byte(c), &parsed); err != nil {
+		t.Fatalf("agentgateway config is not YAML: %v", err)
+	}
+	if want := `default(request.headers["x-agw-caller"], null)`; parsed.Config.StandardAttributes.User != want {
+		t.Errorf("standardAttributes.user = %q, want %q", parsed.Config.StandardAttributes.User, want)
+	}
+	if strings.Contains(cfgData(t, &ClusterOptions{Namespace: "x", Provider: "direct", OpenAIKey: "k"}), "standardAttributes:") {
+		t.Errorf("standardAttributes must only render with the request log")
+	}
+}
+
+func TestPinballConfigHasKeywords(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"    heavy_keywords:", `      - "architecture"`, "    light_keywords:", `      - "tl;dr"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("pinball-config missing %q", want)
+		}
+	}
+}
+
+func TestDiscoverModels(t *testing.T) {
+	off, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"PINBALL_DISCOVERY", "pinball-live", "discovery-cache"} {
+		if strings.Contains(off, s) {
+			t.Errorf("renders %q without --discover-models", s)
+		}
+	}
+	const dsn = "postgres://u:pw@db:5432/ag" //nolint:gosec // fake DSN fixture
+	on, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", DiscoverModels: true, RequestLogDB: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"http://copilot-api.x.svc.cluster.local:4141/v1/models",
+		"/var/cache/pinball/discovery.json",
+		"name: discovery-cache",
+		"model: pinball-live",
+		`- name: "opt-*"`,
+		`- name: "*"`,
+	} {
+		if !strings.Contains(on, want) {
+			t.Errorf("manifests missing %q", want)
+		}
+	}
+	if strings.Contains(on, "- name: opt-claude") {
+		t.Error("copilot opt- twins duplicate the opt-* route")
+	}
+	if _, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "direct", DiscoverModels: true}); err == nil ||
+		!strings.Contains(err.Error(), "discover-models needs --provider copilot") {
+		t.Errorf("direct + --discover-models: err = %v", err)
+	}
+}
+
 func TestPinballKeywordsRenderedFromModelsFile(t *testing.T) {
-	f := modelsFile(t, "pinball:\n  heavy_keywords: [refactor]\n  light_keywords: [titel]\n  scoring: {large_context_tokens: 60000}\n")
+	f := modelsFile(t, "pinball:\n  heavy_keywords: [refactor]\n  light_keywords: []\n  scoring: {large_context_tokens: 60000}\n")
 	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", CopilotToken: "t", ModelsFile: f})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"heavy_keywords:\n      - \"refactor\"", "light_keywords:\n      - \"titel\"", "large_context_tokens: 60000"} {
+	for _, want := range []string{"heavy_keywords:\n      - \"refactor\"\n    light_keywords: []\n", "large_context_tokens: 60000"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
 		}

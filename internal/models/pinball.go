@@ -10,7 +10,7 @@ import (
 )
 
 // Pinball is the optional `pinball:` block of models.yaml: overrides for
-// pinball's thresholds and scoring (pinball 0.7.6 schema). Unset keys keep
+// pinball's thresholds and scoring (pinball 0.8.0 schema). Unset keys keep
 // pinball's own defaults.
 type Pinball struct {
 	Thresholds struct {
@@ -18,9 +18,9 @@ type Pinball struct {
 		Heavy    *int `yaml:"heavy"`
 	} `yaml:"thresholds"`
 	Scoring map[string]int `yaml:"scoring"`
-	// Keyword lists are rendered into pinball.yaml; unset renders none, as before.
-	HeavyKeywords []string `yaml:"heavy_keywords"`
-	LightKeywords []string `yaml:"light_keywords"`
+	// Keyword lists replace pinball's defaults when set; `[]` turns that signal off.
+	HeavyKeywords *[]string `yaml:"heavy_keywords"`
+	LightKeywords *[]string `yaml:"light_keywords"`
 }
 
 // scoringDefaults are pinball's defaults; only used to validate cutoff order.
@@ -127,15 +127,40 @@ func (r *Resolved) ScoringLines() []string {
 	return out
 }
 
-// KeywordLines renders a keyword list as YAML flow-quoted list items (empty when none).
-func KeywordLines(words []string) []string {
+// Keyword lists from pinball 0.8.0's packaged pinball.yaml. A mounted config
+// replaces the packaged one whole, so they are rendered to keep keyword scoring.
+var (
+	heavyKeywords = []string{
+		"architecture", "architect", "refactor", "debug", "root cause", "race condition",
+		"deadlock", "concurrency", "prove", "proof", "security", "vulnerability", "migrate",
+		"migration", "optimize", "performance", "algorithm", "trade-off", "tradeoff",
+		"distributed", "invariant", "investigate",
+	}
+	lightKeywords = []string{
+		"title", "summarize", "summary", "translate", "classify", "extract", "rephrase",
+		"one word", "yes or no", "tl;dr",
+	}
+)
+
+// HeavyKeywordLines renders pinball's heavy_keywords as quoted YAML list items for
+// the templates to indent: the models.yaml list when set, else pinball's defaults.
+func (r *Resolved) HeavyKeywordLines() []string {
+	return keywordLines(r.HeavyKeywords, heavyKeywords)
+}
+
+// LightKeywordLines is HeavyKeywordLines for light_keywords.
+func (r *Resolved) LightKeywordLines() []string {
+	return keywordLines(r.LightKeywords, lightKeywords)
+}
+
+func keywordLines(set *[]string, defaults []string) []string {
+	words := defaults
+	if set != nil {
+		words = *set
+	}
 	out := make([]string, 0, len(words))
 	for _, w := range words {
 		out = append(out, "- "+strconv.Quote(w))
 	}
 	return out
 }
-
-// HeavyKeywordLines and LightKeywordLines are for the templates to indent.
-func (r *Resolved) HeavyKeywordLines() []string { return KeywordLines(r.HeavyKeywords) }
-func (r *Resolved) LightKeywordLines() []string { return KeywordLines(r.LightKeywords) }

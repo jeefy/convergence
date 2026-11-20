@@ -224,6 +224,21 @@ func TestPinballKeywordsAndContextScoring(t *testing.T) {
 	if got := strings.Join(r.ScoringLines(), ","); got != "large_context_tokens: 60000,very_large_context_tokens: 120000" {
 		t.Errorf("scoring lines %q", got)
 	}
+	// unset keeps pinball's defaults; [] turns the signal off
+	p, err = ParsePinball([]byte("pinball:\n  light_keywords: []\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _ = Resolve(config.ProviderCopilot, nil)
+	if err := r.ApplyPinball(p); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.HeavyKeywordLines(); len(got) != len(heavyKeywords) || got[0] != `- "architecture"` {
+		t.Errorf("unset heavy_keywords must keep the defaults, got %q", got)
+	}
+	if got := r.LightKeywordLines(); len(got) != 0 {
+		t.Errorf("light_keywords: [] must render no keywords, got %q", got)
+	}
 	for name, bad := range map[string]string{
 		"zero cutoff":    "pinball:\n  scoring: {large_context_tokens: 0}\n",
 		"very < large":   "pinball:\n  scoring: {large_context_tokens: 100, very_large_context_tokens: 50}\n",

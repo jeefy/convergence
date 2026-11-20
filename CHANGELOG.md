@@ -6,7 +6,32 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- `models.yaml` `pinball:` block: `heavy_keywords` and `light_keywords` are rendered into Pinball's config (compose and Kubernetes), and `scoring` accepts the context-size keys `large_context_tokens`, `large_context`, `very_large_context_tokens`, `very_large_context`, validated (cutoffs positive, very large above large).
+- `--discover-models` on `init` (provider `copilot` or `ollama`) and `cluster install` (provider `copilot`), off by default: Pinball builds its pool from the upstream `/v1/models` (copilot-api or Ollama) and infers tiers, falling back to its cache and then the rendered pool. The gateway routes `auto` to Pinball's pick, passes any other model id through (`*`) and, with the optimizer on, serves `opt-*` as one route so `/v1/models` lists no duplicates. Provider `direct` is refused before any file is written or manifest applied. Covered by `tests/test_e2e_local.sh` (Ollama against the stub) and `tests/test_e2e_cluster.sh` (refusal).
+- `models.yaml` `pinball:` block: `heavy_keywords` and `light_keywords` replace the keyword lists rendered into Pinball's config (compose and Kubernetes; Pinball's own lists stay the default, `[]` turns that signal off), and `scoring` accepts the context-size keys `large_context_tokens`, `large_context`, `very_large_context_tokens`, `very_large_context`, validated (cutoffs positive, very large above large). Covered by `tests/test_e2e_local.sh`.
+
+### Changed
+
+- Documentation: `README.md` is now a short index; details moved to `docs/` pages (installation, quickstart, models, clients, cli, operations, insights, skills, system-prompt, security). Corrected the Continue config path (`~/.continue/config.yaml`), the `config` default gateway URL (`http://localhost:<port>`), the `doctor` check list, `oh-my-opencode` behavior (does not edit `omo.jsonc`) and missing flags in the CLI reference; removed a non-existent `logs/` directory from the file list.
+
+## [0.6.0] - 2026-11-19
+
+### Added
+
+- `convergence config paseo`: adds providers `convergence-claude` (extends `claude`) and `convergence-opencode` (extends `opencode`) under `agents.providers` in Paseo's `config.json` (`$PASEO_HOME`, else `~/.paseo`). The built-in providers are not changed. The Claude provider maps Claude Code's haiku/sonnet/opus slots to `light`/`standard`/`heavy`, disallows `WebSearch` and lists `auto`, the tiers and the local `models.yaml` passthrough names. A created file is `0600`. Covered by `tests/test_e2e_local.sh`.
+
+### Changed
+
+- Bump pinned Pinball image to `0.8.0` (`ghcr.io/jeefy/pinball:0.8.0@sha256:62550d3a0df6119168adee301d268b4a368d000f456c91109471b9fda53a28c4`). Pinball 0.8.0 can build its pool from the upstream `/v1/models` (`PINBALL_DISCOVERY_URL`); Convergence does not enable it yet, so routing uses the rendered pool as before. It also skips a model that cannot serve the request's API shape or `reasoning_effort` (only when the pool carries that data, which the rendered pool does not).
+
+### Fixed
+
+- Local stack: the compose `pinball` service did not set `PINBALL_CONFIG`, so Pinball ignored the mounted `pinball.yaml` and served its packaged model pool, thresholds and keywords. `models.yaml` overrides and `pinball:` settings never reached it. The service now sets `PINBALL_CONFIG`. The rendered `pinball.yaml` (local and the Kubernetes `pinball-config` ConfigMap) now includes Pinball 0.7.7's `heavy_keywords` and `light_keywords`, because a mounted file replaces the packaged one whole and the Kubernetes deployment was routing without keyword scoring. Covered by `tests/test_e2e_local.sh`.
+- Release: the winget publisher failed with `function "envOrDefault" not defined` because GoReleaser only accepts a bare `{{ .Env.NAME }}` for `repository.token`. The v0.5.0 archives, checksums and SBOMs were published; the winget submission was not.
+
+## [0.5.0] - 2026-11-17
+
+### Added
+
 - `system_prompt` (config.yaml), `init --system-prompt [--system-prompt-file F]` and `cluster install --system-prompt [--system-prompt-file F]`: off by default. When enabled, every model in the rendered agentgateway config gets a CEL request `transformation` that prepends a fixed set of behavioral guardrail lines (`internal/prompts`) plus optional extra text to OpenAI chat `messages`, Responses `instructions` and Anthropic Messages `system` on the `/v1` endpoints (agentgateway passes other paths through unchanged). The text is not scrubbed by Stand-In. The optimizer's `opt-` twin models are left without the transformation because their replays come from the request log, which already holds the prompt, and the optimizer's judge requests (`x-agw-caller: eval-replay-judge`) are exempt. The text must be valid UTF-8 without `$` or control characters. Covered by `tests/test_e2e_local.sh` and `tests/test_validate_configs.sh`.
 - Windows release artifacts: `convergence_windows_amd64.zip` and `convergence_windows_arm64.zip`, covered by `checksums.txt` and the SBOMs. The client config writers, `models`, `version` and the commands that talk to a remote gateway or cluster work natively, the local stack stays WSL2-only (#40).
 - `install.ps1`: PowerShell installer (`irm .../install.ps1 | iex`) that downloads the zip, verifies the sha256 against `checksums.txt`, installs to `%LOCALAPPDATA%\Programs\convergence` (or `$env:INSTALL_DIR`), adds it to the user `PATH` and never elevates. Offline tests in `tests/test_install.ps1`.
@@ -15,12 +40,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Bump pinned Pinball image to `0.7.7` (`ghcr.io/jeefy/pinball:0.7.7@sha256:7b610b1426eb4667a60930967c91dd2bab5540f4dd70e75ff8a4dbe6ee2d3881`): the optimizer reads agentgateway 1.6.0 request-log payloads. With `0.7.6` every optimizer run against a 1.6.0 request log ended with `samples: 0`.
 - `doctor` no longer fails the `config` check on Windows for the `.env` file mode (NTFS has no POSIX mode).
 - Unit tests set `USERPROFILE` next to `HOME` (`internal/testhome`) so running them on Windows no longer writes into the real profile; file-mode assertions are skipped there.
 - `install.sh` points Windows users at the zip asset in addition to WSL2.
 
 ### Fixed
 
+- Request log: the `x-agw-caller` request header is now stored as `request_logs.agentgateway_user` (agentgateway `config.standardAttributes.user`). The column stayed empty, so the optimizer's per-caller results and its `eval-*` caller exclusion had nothing to work with. Rendered only when the request log is enabled.
 - Copilot provider: system text sent as Anthropic `system` blocks or as Responses API `instructions` did not reach Claude models. agentgateway converts those to a system message with a list of content parts and to the `developer` role, and Copilot ignored both (observed with `claude-haiku-5.5` through copilot-api `v0.7.0`). Models served by Copilot now carry a `finalTransformation` that sends them as plain-text `system` messages. `tests/test_e2e_copilot.sh` checks all three APIs against the real provider.
 
 ## [0.4.3] - 2026-11-13
@@ -236,7 +263,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - The gateway has no authentication of its own: any local process can use your keys via `127.0.0.1:3000`, and in Kubernetes any pod the NetworkPolicy allows can.
 - Fail-closed means a Stand-In outage rejects requests.
 
-[Unreleased]: https://github.com/jeefy/convergence/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/jeefy/convergence/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jeefy/convergence/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/jeefy/convergence/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/jeefy/convergence/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/jeefy/convergence/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/jeefy/convergence/compare/v0.4.0...v0.4.1
