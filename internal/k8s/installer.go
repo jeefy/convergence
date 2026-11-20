@@ -32,6 +32,8 @@ type ClusterOptions struct {
 	FailOpen     bool             // Stand-In ext_proc failureMode: failOpen (UNSCRUBBED passthrough) vs failClosed
 	OTel         config.OTel      // optional OTLP trace export
 	SystemPrompt prompts.Settings // optional system prompt (request transformation on each model)
+	// DiscoverModels points Pinball at copilot-api's /v1/models (provider copilot only).
+	DiscoverModels bool
 	// RequestLogDB is an external Postgres DSN; RequestLogPostgres renders one in-cluster.
 	// Either enables agentgateway's request log (llm: full) and the optimizer CronJob.
 	RequestLogDB         string
@@ -115,6 +117,9 @@ func RenderManifests(opts *ClusterOptions) (string, error) {
 	}
 	if opts.PassthroughSecret == "" {
 		opts.PassthroughSecret = "convergence-passthrough"
+	}
+	if opts.DiscoverModels && opts.Provider != "copilot" {
+		return "", fmt.Errorf("--discover-models needs --provider copilot: direct has no single model list for pinball")
 	}
 	if opts.RequestLogDB != "" && opts.RequestLogPostgres {
 		return "", fmt.Errorf("--request-log-db and --request-log-postgres are mutually exclusive")

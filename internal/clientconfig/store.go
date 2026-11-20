@@ -88,8 +88,9 @@ func readOptional(path string) ([]byte, bool, error) {
 }
 
 // commit persists the backup + manifest and writes the new content. The
-// original backup and first-seen previous values survive repeated runs.
-func commit(path string, orig []byte, existed bool, out []byte, edits []edit) error {
+// original backup and first-seen previous values survive repeated runs. mode
+// applies only when path does not exist yet.
+func commit(path string, orig []byte, existed bool, out []byte, edits []edit, mode os.FileMode) error {
 	prev, err := readManifest(path)
 	if err != nil {
 		return err
@@ -110,7 +111,7 @@ func commit(path string, orig []byte, existed bool, out []byte, edits []edit) er
 	if err := writeAtomic(path+manifestSuffix, append(mb, '\n'), 0o600); err != nil {
 		return err
 	}
-	return writeAtomic(path, out, 0o644)
+	return writeAtomic(path, out, mode)
 }
 
 func mergeEdits(old, cur []edit) []edit {

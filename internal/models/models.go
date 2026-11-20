@@ -54,7 +54,7 @@ type Resolved struct {
 	Passthrough []Passthrough
 }
 
-// Thresholds are pinball's score cutoffs (pinball 0.7.6 schema).
+// Thresholds are pinball's score cutoffs (pinball 0.8.0 schema).
 type Thresholds struct{ Standard, Heavy int }
 
 // Overrides represents models.yaml configuration.

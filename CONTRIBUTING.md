@@ -45,7 +45,7 @@ internal/telemetry/     metrics scraping for `stats`
 internal/insights/      request-log analysis and cost estimates for `insights`
 internal/version/       build metadata (set via ldflags)
 tests/                  shell e2e and installer tests
-docs/                   architecture notes
+docs/                   user and architecture documentation
 ```
 
 ## Adding a client config
@@ -53,7 +53,7 @@ docs/                   architecture notes
 1. In `internal/clientconfig/`, add a path helper for the client's config file and a configure function. Check the client's documentation for the exact keys. Write a `<file>.convergence.bak` backup before changing anything, keep the user's comments and other keys, and reuse the shared restore helper.
 2. Add tests in `clientconfig_test.go` that run against a temp `HOME`: configure, restore, and restore when no backup exists.
 3. Register the subcommand in `internal/cli/clientconfig.go` so it gets `--dry-run`, `--gateway-url` and `restore [--force]`, and shows up in `config list`.
-4. Add a row to the client table in `README.md` and an entry under `[Unreleased]` in `CHANGELOG.md`.
+4. Add a row to the client table in `docs/clients.md` and an entry under `[Unreleased]` in `CHANGELOG.md`.
 
 ## Bumping pinned image versions
 
@@ -63,14 +63,14 @@ Image tags appear in several places. Change all of them in one PR:
 grep -rn 'agentgateway:v\|stand-in:\|pinball:\|copilot-api:v\|skillspector' --include='*.go' --include='*.tmpl' --include='*.sh' --include='*.md' .
 ```
 
-That covers `internal/templates/render.go`, `internal/k8s/assets/manifests.yaml.tmpl`, `internal/cli/optimize.go`, `tests/`, `README.md` and `docs/architecture.md`. SkillSpector is built from source, so its pin is a commit SHA plus tag (`SourceCommit` and `DefaultImage` in `internal/skillscan/skillscan.go`, mirrored in `tests/test_e2e_local.sh`, `README.md` and `docs/architecture.md`). Read the upstream changelog (agentgateway config schema changes are the usual breakage), run `make test-e2e` and `make test-e2e-cluster`, and note the bump in `CHANGELOG.md`.
+That covers `internal/templates/render.go`, `internal/k8s/assets/manifests.yaml.tmpl`, `internal/cli/optimize.go`, `tests/`, `docs/models.md`, `docs/installation.md` and `docs/architecture.md`. SkillSpector is built from source, so its pin is a commit SHA plus tag (`SourceCommit` and `DefaultImage` in `internal/skillscan/skillscan.go`, mirrored in `tests/test_e2e_local.sh`, `docs/skills.md` and `docs/architecture.md`). Read the upstream changelog (agentgateway config schema changes are the usual breakage), run `make test-e2e` and `make test-e2e-cluster`, and note the bump in `CHANGELOG.md`.
 
 ## Pull requests
 
 - Keep changes focused; one topic per PR.
 - `make test` and `make lint` must pass.
 - Anything that drives a container engine or the stack (new subcommand, flag, config key) needs coverage in `tests/test_e2e_local.sh` or `tests/test_e2e_cluster.sh`. Unit tests with a fake engine are not a substitute.
-- Update `README.md`, `docs/architecture.md` and `[Unreleased]` in `CHANGELOG.md` when behavior changes.
+- Update the relevant page under `docs/` (and `README.md` only if the doc index changes) and `[Unreleased]` in `CHANGELOG.md` when behavior changes.
 - No secrets or real tokens in tests or fixtures.
 
 ## Releases

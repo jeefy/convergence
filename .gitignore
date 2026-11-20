@@ -7,3 +7,4 @@ dist/
 .convergence/
 docs/superpowers/
 coverage.txt
+.omo/

@@ -79,7 +79,11 @@ func Configure(name string, o Options) (Result, error) {
 	if o.DryRun {
 		return res, nil
 	}
-	return res, commit(path, orig, existed, out, edits)
+	mode := c.mode
+	if mode == 0 {
+		mode = 0o644
+	}
+	return res, commit(path, orig, existed, out, edits, mode)
 }
 
 // Restore undoes Configure. A file that is byte-identical to what we wrote is

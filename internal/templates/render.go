@@ -30,7 +30,7 @@ type Images struct {
 var PinnedImages = Images{
 	AgentGateway: "cr.agentgateway.dev/agentgateway:v1.6.0@sha256:482921556876a503ad3675b29223b1897b63a316983e46797ff99ebf83a2a6a2",
 	StandIn:      "ghcr.io/jeefy/stand-in:0.6.4@sha256:11abda87cd135cf60e1c028ee1e35ccab9999cc206cdd8cc2971148bffa5e6c7",
-	Pinball:      "ghcr.io/jeefy/pinball:0.7.6@sha256:c34b38b977b057c3a05e4309e68b8ced10da019b377a267e3f740909f6de2fee",
+	Pinball:      "ghcr.io/jeefy/pinball:0.8.0@sha256:62550d3a0df6119168adee301d268b4a368d000f456c91109471b9fda53a28c4",
 	// v0.1.25 never existed on ghcr; v0.7.0 verified (entrypoint uses GH_TOKEN).
 	CopilotAPI: "ghcr.io/ericc-ch/copilot-api:v0.7.0@sha256:acf4f91931b78b7a4366e72447cfd170a3f3cf6388b9189b098c7236510fbb29",
 	// In-cluster request-log database (cluster install --request-log-postgres); uid 70 is the alpine postgres user.
@@ -141,6 +141,9 @@ func RenderAssetsWithSocket(cfg *config.Config, targetDir, engineName, socket st
 	if err := cfg.SystemPrompt.Validate(); err != nil {
 		return err
 	}
+	if cfg.DiscoverModels && cfg.Provider == config.ProviderDirect {
+		return fmt.Errorf("discover_models needs provider copilot or ollama: direct has no single model list for pinball")
+	}
 	res, err := models.ForConfig(cfg, targetDir)
 	if err != nil {
 		return err
@@ -250,4 +253,19 @@ func providerRef(family string) (string, error) {
 		return "anthropic-direct", nil
 	}
 	return "", fmt.Errorf("unknown upstream family %q", family)
+}
+
+// DiscoveryURL is the upstream /v1/models Pinball discovers its pool from
+// ("" unless discover_models is set).
+func (c RenderContext) DiscoveryURL() string {
+	if c.Config == nil || !c.Config.DiscoverModels {
+		return ""
+	}
+	switch c.Config.Provider {
+	case config.ProviderCopilot:
+		return "http://copilot-api:4141/v1/models"
+	case config.ProviderOllama:
+		return strings.TrimRight(c.Config.OllamaURL, "/") + "/v1/models"
+	}
+	return ""
 }

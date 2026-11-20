@@ -1,4 +1,4 @@
-# Schema of ghcr.io/jeefy/pinball:0.7.6. Generated from internal/models
+# Schema of ghcr.io/jeefy/pinball:0.8.0. Generated from internal/models
 # (override upstream mapping in ~/.convergence/models.yaml).
 models:
 {{- range .Models.Models }}
@@ -16,4 +16,12 @@ scoring:
 {{- range .Models.ScoringLines }}
   {{ . }}
 {{- end }}
+{{- end }}
+heavy_keywords:
+{{- range .Models.HeavyKeywords }}
+  - {{ . }}
+{{- end }}
+light_keywords:
+{{- range .Models.LightKeywords }}
+  - {{ . }}
 {{- end }}

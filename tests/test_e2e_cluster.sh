@@ -125,6 +125,23 @@ EOF
     fi
   fi
 
+  echo "==> '--discover-models' with provider direct must fail before applying anything..."
+  trap - ERR
+  set +e
+  DM_ERR="$("$BIN" cluster install --namespace="${NAMESPACE}" --provider=direct --openai-key=mock-key --anthropic-key=mock-key \
+    --models-file="${MODELS_FILE}" --no-backup --discover-models 2>&1)"
+  DM_RC=$?
+  set -e
+  trap on_err ERR
+  if [ "$DM_RC" -eq 0 ] || ! echo "$DM_ERR" | grep -q "discover-models needs --provider copilot"; then
+    echo "ERROR: expected --discover-models to be refused for provider direct (rc=$DM_RC): $DM_ERR"
+    exit 1
+  fi
+  if kubectl -n "${NAMESPACE}" get deployment agentgateway >/dev/null 2>&1; then
+    echo "ERROR: --discover-models refusal still applied manifests"
+    exit 1
+  fi
+
   echo "==> Deploying Convergence via 'convergence cluster install' (with in-cluster request-log postgres)..."
   PG_PASS="testpgpass123"
   PROMPT_FILE="$(mktemp)"
@@ -182,7 +199,7 @@ EOF
   TOKEN="ghp_$(python3 -c 'import secrets,string;print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
   chat() {
     curl -s -D /tmp/chat.hdr -o /tmp/chat.out -w '%{http_code}' -X POST http://localhost:13000/v1/chat/completions \
-      -H 'Content-Type: application/json' \
+      -H 'Content-Type: application/json' -H 'x-agw-caller: e2e-cluster' \
       -d "{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"my token is ${TOKEN} please echo\"}]}" || true
   }
 
@@ -272,6 +289,16 @@ assert n >= 1, n
   insights_json="$("$BIN" insights --db-dsn="${PG_DSN}" --since=1d --json)"
   echo "${insights_json}" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_requests"] > 0'
   echo "Insights query and JSON verification passed!"
+
+  echo "==> Request log records the x-agw-caller header as agentgateway_user..."
+  callers=""
+  for _ in $(seq 1 20); do
+    callers="$(kubectl -n "${NAMESPACE}" exec statefulset/request-log-postgres -- psql -U convergence -d agentgateway -At \
+      -c "select count(*) from request_logs where agentgateway_user = 'e2e-cluster'" 2>/dev/null || true)"
+    [ "${callers:-0}" -ge 1 ] 2>/dev/null && break
+    sleep 1
+  done
+  [ "${callers:-0}" -ge 1 ] || { echo "ERROR: no request_logs row with agentgateway_user=e2e-cluster (got '${callers}')" >&2; exit 1; }
 
   echo "==> Fail-closed: scale stand-in to 0; request must not reach upstream unscrubbed..."
   BEFORE="$(curl -sf http://localhost:${STUB_PORT}/_received | wc -l)"

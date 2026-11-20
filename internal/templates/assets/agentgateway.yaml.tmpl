@@ -4,6 +4,12 @@
 config:
   statsAddr: 0.0.0.0:15020
   connectionTerminationDeadline: 600s
+{{- if .Config.RequestLogDB }}
+  # request_logs.agentgateway_user: the caller a client names in x-agw-caller.
+  # Pinball's optimizer (per-caller results, eval-* exclusion) and insights read it.
+  standardAttributes:
+    user: 'default(request.headers["x-agw-caller"], null)'
+{{- end }}
   logging:
     format: json
 {{- if .Config.RequestLogDB }}
@@ -147,6 +153,9 @@ llm:
 {{- range .Models.Models }}
             - {when: 'default(extauthz.model, "") == "{{ .PinballName }}"', model: pinball-{{ .PinballName }}}
 {{- end }}
+{{- if .Config.DiscoverModels }}
+            - {when: 'default(extauthz.model, "") != ""', model: pinball-live}
+{{- end }}
             - {model: pinball-{{ .Models.Fallback }}}
     - name: pinball
       routing: *pinball_routing
@@ -197,10 +206,13 @@ llm:
     # No system_prompt transformation here: replays are built from the request
     # log, which already holds the prepended prompt.
 {{- range .Models.Models }}
+{{- /* with discover_models, "opt-*" already serves a twin whose name is its upstream id */}}
+{{- if not (and $.Config.DiscoverModels (eq .PinballName .UpstreamModel) (eq .UpstreamProvider (printf "%s" $.Config.Provider))) }}
     - name: opt-{{ .PinballName }}
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
 {{- if eq (providerRef .UpstreamProvider) "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- range .Models.Passthrough }}
@@ -208,6 +220,33 @@ llm:
       provider: {reference: {{ if .Endpoint }}{{ .Endpoint }}{{ else }}{{ providerRef .Provider }}{{ end }}}
       params: {model: {{ .Model }}}
 {{- if and (not .Endpoint) (eq (providerRef .Provider) "copilot-completions") }}{{ template "copilotSystem" }}{{ end }}
+{{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
+{{ . }}
+{{- end }}
+{{- end }}
+{{- if .Config.DiscoverModels }}
+{{- $ref := "ollama-local" }}{{ if eq .Config.Provider "copilot" }}{{ $ref = "copilot-completions" }}{{ end }}
+    # discover_models: Pinball picks an id from the upstream's model list; it
+    # is sent upstream as is. Other ids go to the upstream unchanged.
+    - name: pinball-live
+      visibility: internal
+      provider: {reference: {{ $ref }}}
+{{- if eq $ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- with $.Config.SystemPrompt.YAMLTransformationModel 6 "default(extauthz.model, llmRequest.model)" }}
+{{ . }}
+{{- end }}
+{{- if .Config.RequestLogDB }}
+    - name: "opt-*"
+      provider: {reference: {{ $ref }}}
+{{- if eq $ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+      transformation:
+        # substring, not stripPrefix: agentgateway cannot reverse it, so
+        # /v1/models lists one "opt-*" entry instead of a twin of every model.
+        model: 'llmRequest.model.substring(4)'
+{{- end }}
+    - name: "*"
+      provider: {reference: {{ $ref }}}
+{{- if eq $ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
 {{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
 {{ . }}
 {{- end }}

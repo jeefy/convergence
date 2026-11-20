@@ -9,7 +9,7 @@ import (
 )
 
 // Pinball is the optional `pinball:` block of models.yaml: overrides for
-// pinball's thresholds and scoring (pinball 0.7.6 schema). Unset keys keep
+// pinball's thresholds and scoring (pinball 0.8.0 schema). Unset keys keep
 // pinball's own defaults.
 type Pinball struct {
 	Thresholds struct {
@@ -110,3 +110,24 @@ func (r *Resolved) ScoringLines() []string {
 	}
 	return out
 }
+
+// Keyword lists from pinball 0.8.0's packaged pinball.yaml. A mounted config
+// replaces the packaged one whole, so they are rendered to keep keyword scoring.
+var (
+	heavyKeywords = []string{
+		"architecture", "architect", "refactor", "debug", "root cause", "race condition",
+		"deadlock", "concurrency", "prove", "proof", "security", "vulnerability", "migrate",
+		"migration", "optimize", "performance", "algorithm", "trade-off", "tradeoff",
+		"distributed", "invariant", "investigate",
+	}
+	lightKeywords = []string{
+		"title", "summarize", "summary", "translate", "classify", "extract", "rephrase",
+		"one word", "yes or no", "tl;dr",
+	}
+)
+
+// HeavyKeywords are pinball's heavy_keywords.
+func (r *Resolved) HeavyKeywords() []string { return heavyKeywords }
+
+// LightKeywords are pinball's light_keywords.
+func (r *Resolved) LightKeywords() []string { return lightKeywords }

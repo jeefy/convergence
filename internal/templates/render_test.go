@@ -633,6 +633,95 @@ func TestCopilotSystemTextNormalised(t *testing.T) {
 	}
 }
 
+// With the request log on, the x-agw-caller header is stored as
+// request_logs.agentgateway_user, which Pinball's optimizer and insights read.
+func TestRequestLogRecordsCaller(t *testing.T) {
+	type parsed struct {
+		Config struct {
+			StandardAttributes struct{ User string } `yaml:"standardAttributes"`
+		}
+	}
+	_, files := render(t, func(c *config.Config) { c.RequestLogDB = "postgres://db/x" })
+	var p parsed
+	if err := yaml.Unmarshal([]byte(files["agentgateway.yaml"]), &p); err != nil {
+		t.Fatalf("rendered config is not YAML: %v", err)
+	}
+	if want := `default(request.headers["x-agw-caller"], null)`; p.Config.StandardAttributes.User != want {
+		t.Errorf("standardAttributes.user = %q, want %q", p.Config.StandardAttributes.User, want)
+	}
+	_, files = render(t, func(c *config.Config) {})
+	if strings.Contains(files["agentgateway.yaml"], "standardAttributes:") {
+		t.Errorf("standardAttributes must only render with the request log")
+	}
+}
+
+// pinball falls back to its packaged pool unless PINBALL_CONFIG names the mounted file,
+// so models.yaml overrides would be ignored. Keyword lists must be rendered: the mounted
+// file replaces the packaged one, keywords included.
+func TestPinballLoadsRenderedConfig(t *testing.T) {
+	_, files := render(t, func(*config.Config) {})
+	if !strings.Contains(files[ComposeFile], "PINBALL_CONFIG: /etc/pinball/pinball.yaml") {
+		t.Error("pinball service must set PINBALL_CONFIG to the mounted pinball.yaml")
+	}
+	pb := files["pinball.yaml"]
+	for _, want := range []string{"heavy_keywords:", "  - architecture", "  - race condition", "light_keywords:", "  - tl;dr"} {
+		if !strings.Contains(pb, want) {
+			t.Errorf("pinball.yaml missing %q:\n%s", want, pb)
+		}
+	}
+}
+
+func TestDiscoverModels(t *testing.T) {
+	_, off := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	for _, f := range []string{"agentgateway.yaml", "docker-compose.yaml"} {
+		for _, s := range []string{"PINBALL_DISCOVERY", "pinball-live", `name: "*"`} {
+			if strings.Contains(off[f], s) {
+				t.Errorf("%s renders %q without discover_models", f, s)
+			}
+		}
+	}
+
+	_, on := render(t, func(c *config.Config) {
+		c.Provider = config.ProviderCopilot
+		c.DiscoverModels = true
+		c.RequestLogDB = "postgres://u:pw@db:5432/ag"
+	})
+	ag, dc := on["agentgateway.yaml"], on["docker-compose.yaml"]
+	for _, want := range []string{"model: pinball-live", "- name: pinball-live", `- name: "opt-*"`, `- name: "*"`, "llmRequest.model.substring(4)"} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("agentgateway.yaml missing %q", want)
+		}
+	}
+	if strings.Contains(ag, "- name: opt-claude") {
+		t.Errorf("copilot opt- twins duplicate the opt-* route:\n%s", ag)
+	}
+	for _, want := range []string{"PINBALL_DISCOVERY_URL: http://copilot-api:4141/v1/models", "PINBALL_DISCOVERY_CACHE: /tmp/pinball-discovery.json"} {
+		if !strings.Contains(dc, want) {
+			t.Errorf("docker-compose.yaml missing %q", want)
+		}
+	}
+
+	_, ol := render(t, func(c *config.Config) {
+		c.Provider = config.ProviderOllama
+		c.OllamaURL = "http://host.docker.internal:11434/"
+		c.DiscoverModels = true
+		c.RequestLogDB = "postgres://u:pw@db:5432/ag"
+	})
+	if !strings.Contains(ol["docker-compose.yaml"], "PINBALL_DISCOVERY_URL: http://host.docker.internal:11434/v1/models") {
+		t.Errorf("ollama discovery URL not rendered:\n%s", ol["docker-compose.yaml"])
+	}
+	if !strings.Contains(ol["agentgateway.yaml"], "- name: opt-") {
+		t.Error("ollama opt- twins (pool name differs from upstream id) must stay")
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderDirect
+	cfg.DiscoverModels = true
+	if err := RenderAssets(cfg, t.TempDir()); err == nil || !strings.Contains(err.Error(), "discover_models needs provider copilot or ollama") {
+		t.Errorf("direct + discover_models: err = %v", err)
+	}
+}
+
 func TestTracingCarriesPinballScoreAndEstTokens(t *testing.T) {
 	_, files := render(t, func(c *config.Config) {
 		c.OTel = config.OTel{Endpoint: "localhost:4317"}

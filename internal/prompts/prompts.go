@@ -115,11 +115,24 @@ func (s Settings) CELString() string {
 // judge grades replies and has its own system prompt.
 // Returns "" when there is nothing to render.
 func (s Settings) YAMLTransformation(indent int) string {
+	return s.YAMLTransformationModel(indent, "")
+}
+
+// YAMLTransformationModel is YAMLTransformation plus a `model:` CEL expression
+// (none when model is ""). Returns "" when there is nothing to render.
+func (s Settings) YAMLTransformationModel(indent int, model string) string {
+	pad := strings.Repeat(" ", indent)
+	head := pad + "transformation:\n"
+	if model != "" {
+		head += pad + "  model: '" + model + "'\n"
+	}
 	if s.Content() == "" {
-		return ""
+		if model == "" {
+			return ""
+		}
+		return head
 	}
 	p := s.CELString()
-	pad := strings.Repeat(" ", indent)
 	// on(path) is true for requests that get the prompt on that endpoint
 	on := func(path string) string {
 		return `default(request.headers["x-agw-caller"], "") != "` + JudgeCaller + `" && request.path.startsWith("` + path + `")`
@@ -133,7 +146,7 @@ func (s Settings) YAMLTransformation(indent int) string {
 		{"instructions", on("/v1/responses") + ` ? ` + p + ` + (has(llmRequest.instructions) && llmRequest.instructions != null ? "\n\n" + llmRequest.instructions : "") : llmRequest.instructions`},
 	}
 	var b strings.Builder
-	b.WriteString(pad + "transformation:\n")
+	b.WriteString(head)
 	for _, e := range exprs {
 		b.WriteString(pad + "  " + e[0] + ": |-\n")
 		b.WriteString(pad + "    " + e[1] + "\n")
