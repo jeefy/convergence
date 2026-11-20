@@ -48,5 +48,5 @@ Run `make lint` and `go test -race ./...` before declaring work done. Never comm
 
 - Errors: wrap with `%w`, one `Error:` line printed once (handled in `cmd/convergence/main.go`). Never swallow an error that matters.
 - Minimal changes; match the surrounding code. Don't add dependencies without need (the Prometheus parser and JSONC editor are deliberately dependency-free).
-- Docs: concise and factual, no marketing, no cost-savings claims beyond what `insights` measures, no em dashes. Update `README.md`, `docs/architecture.md` and the `[Unreleased]`/v0.1.0 entry in `CHANGELOG.md` when behavior changes.
+- Docs: concise and factual, no marketing, no cost-savings claims beyond what `insights` measures, no em dashes. Update the relevant page under `docs/` (README.md is a short index; keep it that way) and the `[Unreleased]`/v0.1.0 entry in `CHANGELOG.md` when behavior changes.
 - `docs/superpowers/` is gitignored local scratch; never commit it.

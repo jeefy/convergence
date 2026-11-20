@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `--discover-models` on `init` (provider `copilot` or `ollama`) and `cluster install` (provider `copilot`), off by default: Pinball builds its pool from the upstream `/v1/models` (copilot-api or Ollama) and infers tiers, falling back to its cache and then the rendered pool. The gateway routes `auto` to Pinball's pick, passes any other model id through (`*`) and, with the optimizer on, serves `opt-*` as one route so `/v1/models` lists no duplicates. Provider `direct` is refused before any file is written or manifest applied. Covered by `tests/test_e2e_local.sh` (Ollama against the stub) and `tests/test_e2e_cluster.sh` (refusal).
+
+### Changed
+
+- Documentation: `README.md` is now a short index; details moved to `docs/` pages (installation, quickstart, models, clients, cli, operations, insights, skills, system-prompt, security). Corrected the Continue config path (`~/.continue/config.yaml`), the `config` default gateway URL (`http://localhost:<port>`), the `doctor` check list, `oh-my-opencode` behavior (does not edit `omo.jsonc`) and missing flags in the CLI reference; removed a non-existent `logs/` directory from the file list.
+
 ## [0.6.0] - 2026-11-19
 
 ### Added

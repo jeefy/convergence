@@ -2,7 +2,7 @@
 
 ## Request flow
 
-Every request to the gateway goes through the same four steps.
+Every request to the gateway goes through the same steps.
 
 ```
  [client / sandboxed agent] ──► agentgateway :3000 /v1
@@ -75,7 +75,6 @@ Secrets live only in `config.yaml` and `.env`. The rendered files are world-read
 | `models.yaml` | user | Optional tier to upstream model overrides (`convergence models init`) |
 | `skill-scan.json` | user | Cached result of the last `skills scan` |
 | `backups/` | user | Request-log dumps taken by `cluster install` before an upgrade (last 5) |
-| `logs/` | 0700 | Gateway access logs |
 
 copilot-api and the OpenShell gateway are optional compose services with named volumes `copilot-data` and `openshell-data`. `convergence uninstall --purge` deletes the whole directory.
 
@@ -123,4 +122,4 @@ Services are `ClusterIP`. Reach the gateway with `kubectl port-forward svc/agent
 
 ## Model mapping
 
-`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See [Model routing](../README.md#model-routing) in the README.
+`internal/models` is the single source for the pinball model pool, tiers, thresholds and per-provider upstream ids. `pinball.yaml` and the gateway's `auto` virtual model are both generated from it. Defaults are overridden by `~/.convergence/models.yaml` (local) or `cluster install --models-file`. See [Providers and model routing](models.md).
