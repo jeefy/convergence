@@ -92,6 +92,13 @@ pinball:
   light_keywords: [title, summarize, translate, titel, zusammenfassung]
 ```
 
+`normalize_reasoning_effort: true` makes the gateway send Pinball's per-model `reasoning_effort` upstream. Pinball (after 0.8.0) answers a normalized word for the chosen model in its `/check` reply (for example Copilot rejects `none` and `minimal`, and haiku-4.5 rejects any value); the gateway copies it into the ext_authz metadata and every `pinball-*` model sets `reasoning_effort` from it, next to the existing Copilot `messages` transformation. When Pinball sends none, the expression fails and agentgateway removes the field. **Needs a Pinball image newer than the pinned `0.8.0` (`cluster install --image-pinball`, or `image_pinball` in `config.yaml` locally):** `0.8.0` answers no `reasoning_effort`, so with the key on, the clients' own effort would be dropped. Off by default; nothing is rendered then.
+
+```yaml
+pinball:
+  normalize_reasoning_effort: true
+```
+
 **Local light tier.** Short prompts (titles, one-line questions) land in `light`. You can keep the heavier tiers on your cloud provider and serve `light` from a local Ollama model with the `ollama:` prefix, accepted for `copilot` and `direct`:
 
 ```yaml

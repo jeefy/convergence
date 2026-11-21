@@ -100,6 +100,9 @@ llm:
                 reason: 'json(response.body).reason'
                 score: 'json(response.body).score'
                 est_tokens: 'json(response.body).est_tokens'
+{{- if .Models.NormalizeReasoningEffort }}
+                reasoning_effort: 'json(response.body).reasoning_effort'
+{{- end }}
 
   providers:
 {{- if or (eq .Config.Provider "copilot") (.Models.UsesFamily "copilot") }}
@@ -175,6 +178,13 @@ llm:
           targets:
             - {model: pinball-{{ .Models.TierModel "heavy" }}}
 
+{{- define "effortKey" }}
+        reasoning_effort: 'extauthz.reasoning_effort'
+{{- end }}
+{{- define "effortOnly" }}
+      finalTransformation:
+        reasoning_effort: 'extauthz.reasoning_effort'
+{{- end }}
 {{- define "copilotSystem" }}
       finalTransformation:
         messages: |-
@@ -195,7 +205,7 @@ llm:
       visibility: internal
       provider: {reference: {{ providerRef .UpstreamProvider }}}
       params: {model: {{ .UpstreamModel }}}
-{{- if eq (providerRef .UpstreamProvider) "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- if eq (providerRef .UpstreamProvider) "copilot-completions" }}{{ template "copilotSystem" }}{{ if $.Models.NormalizeReasoningEffort }}{{ template "effortKey" }}{{ end }}{{ else if $.Models.NormalizeReasoningEffort }}{{ template "effortOnly" }}{{ end }}
 {{- with $.Config.SystemPrompt.YAMLTransformation 6 }}
 {{ . }}
 {{- end }}
@@ -231,7 +241,7 @@ llm:
     - name: pinball-live
       visibility: internal
       provider: {reference: {{ $ref }}}
-{{- if eq $ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- if eq $ref "copilot-completions" }}{{ template "copilotSystem" }}{{ if $.Models.NormalizeReasoningEffort }}{{ template "effortKey" }}{{ end }}{{ else if $.Models.NormalizeReasoningEffort }}{{ template "effortOnly" }}{{ end }}
 {{- with $.Config.SystemPrompt.YAMLTransformationModel 6 "default(extauthz.model, llmRequest.model)" }}
 {{ . }}
 {{- end }}
