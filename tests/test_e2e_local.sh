@@ -399,7 +399,7 @@ assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["cont
   wait_for "stand-in after restart" 30 curl -sf "http://127.0.0.1:$STANDIN/metrics"
 
   echo "==> models.yaml pinball keywords and context scoring reach Pinball"
-  printf 'pinball:\n  heavy_keywords: [ursache]\n  light_keywords: []\n  scoring: {large_context_tokens: 60000}\n' \
+  printf 'pinball:\n  heavy_keywords: [ursache]\n  light_keywords: []\n  scoring: {large_context_tokens: 60000}\n  wrapped_user_messages: [{prefix: "<skill>"}]\n' \
     >"$cfgdir/models.yaml"
   "$BIN" restart
   wait_for "pinball after models.yaml" 30 curl -sf "http://127.0.0.1:$PINBALL/metrics"
@@ -410,6 +410,10 @@ assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["cont
   pr="$(curl -sf -X POST "http://127.0.0.1:$PINBALL/check" -H 'Content-Type: application/json' \
     -d '{"model":"auto","messages":[{"role":"user","content":"Generate a title for this chat"}]}')"
   echo "$pr" | grep -q 'light:' && fail "light_keywords: [] still scored a light keyword: $pr"
+  grep -q 'wrapped_user_messages:' "$cfgdir/pinball.yaml" || fail "wrapped_user_messages not rendered"
+  pr="$(curl -sf -X POST "http://127.0.0.1:$PINBALL/check" -H 'Content-Type: application/json' \
+    -d '{"model":"auto","messages":[{"role":"user","content":"<skill> Was ist die Ursache?"}]}')"
+  echo "$pr" | grep -q 'kw:ursache' && fail "wrapped user message was still scored: $pr"
   rm "$cfgdir/models.yaml"
   "$BIN" restart
   wait_for "pinball after models.yaml removed" 30 curl -sf "http://127.0.0.1:$PINBALL/metrics"

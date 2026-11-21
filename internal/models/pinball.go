@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -21,6 +22,23 @@ type Pinball struct {
 	// Keyword lists replace pinball's defaults when set; `[]` turns that signal off.
 	HeavyKeywords *[]string `yaml:"heavy_keywords"`
 	LightKeywords *[]string `yaml:"light_keywords"`
+	// Sticky keeps a conversation on its tier and model (pinball newer than 0.8.0).
+	Sticky *Sticky `yaml:"sticky"`
+	// WrappedUserMessages marks user messages that are mostly client scaffolding.
+	WrappedUserMessages []WrappedUserMessage `yaml:"wrapped_user_messages"`
+}
+
+// Sticky mirrors pinball's `sticky` block.
+type Sticky struct {
+	Sessions   int `yaml:"sessions" json:"sessions"`
+	TTLSeconds int `yaml:"ttl_seconds" json:"ttl_seconds"`
+}
+
+// WrappedUserMessage mirrors pinball's `wrapped_user_messages` items.
+type WrappedUserMessage struct {
+	Prefix             string   `yaml:"prefix" json:"prefix"`
+	InstructionMarkers []string `yaml:"instruction_markers,omitempty" json:"instruction_markers,omitempty"`
+	InstructionEnd     string   `yaml:"instruction_end,omitempty" json:"instruction_end,omitempty"`
 }
 
 // scoringDefaults are pinball's defaults; only used to validate cutoff order.
@@ -107,6 +125,23 @@ func (r *Resolved) ApplyPinball(p *Pinball) error {
 			return fmt.Errorf("models.yaml: pinball.scoring.%s must not be negative", k)
 		}
 	}
+	if st := p.Sticky; st != nil {
+		if st.Sessions <= 0 {
+			return fmt.Errorf("models.yaml: pinball.sticky.sessions must be greater than 0")
+		}
+		if st.TTLSeconds == 0 {
+			st.TTLSeconds = 3600 // pinball's default
+		}
+		if st.TTLSeconds < 0 {
+			return fmt.Errorf("models.yaml: pinball.sticky.ttl_seconds must be greater than 0")
+		}
+	}
+	for i, w := range p.WrappedUserMessages {
+		if w.Prefix == "" {
+			return fmt.Errorf("models.yaml: pinball.wrapped_user_messages[%d].prefix must not be empty", i)
+		}
+	}
+	r.Sticky, r.Wrapped = p.Sticky, p.WrappedUserMessages
 	r.Scoring = p.Scoring
 	r.HeavyKeywords, r.LightKeywords = p.HeavyKeywords, p.LightKeywords
 	return nil
@@ -161,6 +196,20 @@ func keywordLines(set *[]string, defaults []string) []string {
 	out := make([]string, 0, len(words))
 	for _, w := range words {
 		out = append(out, "- "+strconv.Quote(w))
+	}
+	return out
+}
+
+// WrappedLines renders wrapped_user_messages as JSON flow mappings (valid YAML, so
+// quoting and escaping need no extra code) for the templates to indent.
+func (r *Resolved) WrappedLines() []string {
+	out := make([]string, 0, len(r.Wrapped))
+	for _, w := range r.Wrapped {
+		var b strings.Builder
+		enc := json.NewEncoder(&b)
+		enc.SetEscapeHTML(false) // "<skill>" prefixes stay readable
+		_ = enc.Encode(w)        // encoding plain strings cannot fail
+		out = append(out, "- "+strings.TrimSpace(b.String()))
 	}
 	return out
 }

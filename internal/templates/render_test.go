@@ -732,3 +732,24 @@ func TestTracingCarriesPinballScoreAndEstTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestPinballStickyAndWrappedRendered(t *testing.T) {
+	_, off := render(t, func(*config.Config) {})
+	if strings.Contains(off["pinball.yaml"], "sticky") || strings.Contains(off["pinball.yaml"], "wrapped_user_messages") {
+		t.Error("sticky and wrapped_user_messages must not be rendered by default")
+	}
+	dir, _ := render(t, func(*config.Config) {})
+	y := "pinball:\n  sticky: {sessions: 200, ttl_seconds: 600}\n  wrapped_user_messages: [{prefix: \"<skill>\"}]\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenderAssets(config.DefaultConfig(), dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "pinball.yaml"))
+	for _, want := range []string{"sticky:\n  sessions: 200\n  ttl_seconds: 600\n", "wrapped_user_messages:\n  - {\"prefix\":\"<skill>\"}\nheavy_keywords:"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("pinball.yaml missing %q:\n%s", want, b)
+		}
+	}
+}

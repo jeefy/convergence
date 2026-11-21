@@ -92,6 +92,17 @@ pinball:
   light_keywords: [title, summarize, translate, titel, zusammenfassung]
 ```
 
+`wrapped_user_messages` lists user-role messages that are mostly client scaffolding (an injected skill file, say). Pinball scores only the text after the last `instruction_markers` hit, cut at `instruction_end`; with no marker the message is not scored, and it still counts toward prompt size. `prefix` is required. Pinball `0.8.0` accepts this key. Unset, nothing is rendered.
+
+`sticky: {sessions, ttl_seconds}` keeps a conversation on its tier (as a floor) and model while it still fits, so a config reload cannot move it mid-session and drop the prompt cache. `sessions` (conversations remembered, LRU) is required and greater than 0, `ttl_seconds` defaults to 3600. State is per Pinball process: lost on restart, not shared between replicas. **Needs a Pinball image newer than the pinned `0.8.0`** (`cluster install --image-pinball`, or `image_pinball` in `config.yaml` locally): `0.8.0` rejects the `sticky` key and does not start. Unset, nothing is rendered.
+
+```yaml
+pinball:
+  sticky: {sessions: 500, ttl_seconds: 3600}
+  wrapped_user_messages:
+    - {prefix: "<skill>", instruction_markers: ["Task:"], instruction_end: "</skill>"}
+```
+
 **Local light tier.** Short prompts (titles, one-line questions) land in `light`. You can keep the heavier tiers on your cloud provider and serve `light` from a local Ollama model with the `ollama:` prefix, accepted for `copilot` and `direct`:
 
 ```yaml
