@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- `models.yaml` passthrough `auth: oauth` (provider `anthropic`, needs `api_key_env`): sends the key as `Authorization: Bearer` and appends `oauth-2025-04-20` to the client's `anthropic-beta` header (Claude Code's own betas are kept), so several Claude subscription accounts can be served side by side, one model name per account (local and cluster). Covered by unit tests, `tests/test_validate_configs.sh` and `tests/test_e2e_local.sh` (two accounts against the stub: per-account token, merged betas, client key not forwarded); not run against the live Anthropic API. Passthrough names are now limited to letters, digits and `. _ : / -`.
 - `--discover-models` on `init` (provider `copilot` or `ollama`) and `cluster install` (provider `copilot`), off by default: Pinball builds its pool from the upstream `/v1/models` (copilot-api or Ollama) and infers tiers, falling back to its cache and then the rendered pool. The gateway routes `auto` to Pinball's pick, passes any other model id through (`*`) and, with the optimizer on, serves `opt-*` as one route so `/v1/models` lists no duplicates. Provider `direct` is refused before any file is written or manifest applied. Covered by `tests/test_e2e_local.sh` (Ollama against the stub) and `tests/test_e2e_cluster.sh` (refusal).
 - Tracing spans (compose and Kubernetes) carry `pinball.est_tokens` next to `pinball.score`, so a trace shows how large Pinball judged the prompt to be.
 - `models.yaml` `pinball:` block: `heavy_keywords` and `light_keywords` replace the keyword lists rendered into Pinball's config (compose and Kubernetes; Pinball's own lists stay the default, `[]` turns that signal off), and `scoring` accepts the context-size keys `large_context_tokens`, `large_context`, `very_large_context_tokens`, `very_large_context`, validated (cutoffs positive, very large above large). Covered by `tests/test_e2e_local.sh`.
@@ -13,6 +14,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- `config <client> --gateway-url` now also reads the local `models.yaml` passthrough names (previously only without the flag), so `config paseo` lists them for a remote gateway. Keep the local file matching the gateway.
 - Documentation: `README.md` is now a short index; details moved to `docs/` pages (installation, quickstart, models, clients, cli, operations, insights, skills, system-prompt, security). Corrected the Continue config path (`~/.continue/config.yaml`), the `config` default gateway URL (`http://localhost:<port>`), the `doctor` check list, `oh-my-opencode` behavior (does not edit `omo.jsonc`) and missing flags in the CLI reference; removed a non-existent `logs/` directory from the file list.
 
 ## [0.6.0] - 2026-11-19

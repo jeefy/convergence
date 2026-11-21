@@ -25,7 +25,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 validate() { # validate <name> <config.yaml>  (unset $VARs get dummy values: agentgateway refuses unset ones)
   local name="$1" cfg="$2" envf="$WORK/${1//\//-}.env"
   : >"$envf"
-  { grep -o '\$[A-Z][A-Z0-9_]*' "$cfg" || true; } | sort -u | tr -d '$' | while read -r v; do echo "$v=dummy" >>"$envf"; done
+  { grep -o '\${\?[A-Z][A-Z0-9_]*' "$cfg" || true; } | sort -u | tr -d '${' | while read -r v; do echo "$v=dummy" >>"$envf"; done
   chmod 644 "$cfg"
   echo "==> validate: $name"
   "$ENGINE" run --rm --env-file "$envf" -v "$cfg":/c/config.yaml:ro,Z "$AGW_IMAGE" -f /c/config.yaml --validate-only \
@@ -76,6 +76,16 @@ validate local/passthrough "$HOME/.convergence/agentgateway.yaml"
   --ollama-url http://host.docker.internal:11434 --system-prompt >/dev/null
 grep -A6 'name: fable' "$HOME/.convergence/agentgateway.yaml" | grep -q 'transformation:' || fail "system prompt not rendered on passthrough model"
 validate local/passthrough-system-prompt "$HOME/.convergence/agentgateway.yaml"
+# two Claude subscription accounts, one per model name
+cat >"$HOME/.convergence/models.yaml" <<'Y'
+passthrough:
+  claude-lf-sonnet: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_LF_TOKEN, auth: oauth}
+  claude-jeefy-sonnet: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_JEEFY_TOKEN, auth: oauth}
+Y
+CLAUDE_LF_TOKEN=lf CLAUDE_JEEFY_TOKEN=jeefy "$BIN" init --yes --engine "$ENGINE" --provider copilot --copilot-token "$FAKE_GH_TOKEN" >/dev/null
+grep -q 'anthropic-beta' "$HOME/.convergence/agentgateway.yaml" || fail "oauth passthrough not rendered"
+validate local/claude-oauth "$HOME/.convergence/agentgateway.yaml"
+cp "$HOME/.convergence/models.yaml" "$WORK/claude-models.yaml"
 export HOME="$ORIG_HOME"
 
 # Kubernetes: extract the agentgateway config from the rendered Secret
@@ -100,5 +110,6 @@ k8s_variant direct --provider direct --openai-key sk-test
 k8s_variant fail-open --provider direct --openai-key sk-test --fail-open
 k8s_variant otel --provider direct --openai-key sk-test --otel-endpoint collector:4317
 k8s_variant system-prompt --provider direct --openai-key sk-test --system-prompt --system-prompt-file "$WORK/extra-prompt.txt"
+k8s_variant claude-oauth --provider copilot --copilot-token "$FAKE_GH_TOKEN" --models-file "$WORK/claude-models.yaml"
 
 echo "==> all configs validated"
