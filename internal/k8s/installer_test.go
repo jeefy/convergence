@@ -837,3 +837,24 @@ func TestPinballKeywordsRenderedFromModelsFile(t *testing.T) {
 		}
 	}
 }
+
+func TestPinballStickyAndWrappedRenderedFromModelsFile(t *testing.T) {
+	base := &ClusterOptions{Namespace: "x", Provider: "copilot", CopilotToken: "t"}
+	off, err := RenderManifests(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(off, "sticky:") || strings.Contains(off, "wrapped_user_messages:") {
+		t.Error("sticky and wrapped_user_messages must not be rendered by default")
+	}
+	base.ModelsFile = modelsFile(t, "pinball:\n  sticky: {sessions: 200}\n  wrapped_user_messages: [{prefix: \"<skill>\"}]\n")
+	on, err := RenderManifests(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"    sticky:\n      sessions: 200\n      ttl_seconds: 3600\n", "    wrapped_user_messages:\n      - {\"prefix\":\"<skill>\"}\n    heavy_keywords:"} {
+		if !strings.Contains(on, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}

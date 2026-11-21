@@ -51,6 +51,10 @@ type Resolved struct {
 	// HeavyKeywords and LightKeywords come from models.yaml `pinball.heavy_keywords` /
 	// `pinball.light_keywords`; nil renders pinball's defaults, empty turns the signal off.
 	HeavyKeywords, LightKeywords *[]string
+	// Sticky and Wrapped come from models.yaml `pinball.sticky` / `pinball.wrapped_user_messages`;
+	// unset renders nothing. Sticky needs a Pinball image newer than 0.8.0.
+	Sticky  *Sticky
+	Wrapped []WrappedUserMessage
 	// Fallback is the PinballName used when pinball is unreachable.
 	Fallback string
 	// Passthrough are fixed-name models without Pinball (models.yaml `passthrough:`).
