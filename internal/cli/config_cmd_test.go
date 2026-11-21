@@ -105,3 +105,22 @@ func TestConfigRejectsUnknownArgAndEnvPrints(t *testing.T) {
 		t.Error("env printed nothing")
 	}
 }
+
+func TestConfigPaseo_gatewayURLKeepsLocalPassthrough(t *testing.T) {
+	e := newFakeEnv(t)
+	t.Setenv("PASEO_HOME", filepath.Join(e.home, ".paseo"))
+	if err := os.MkdirAll(e.dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	y := "passthrough:\n  claude-jeefy-opus-5: {provider: anthropic, model: claude-opus-5, api_key_env: CLAUDE_JEEFY_TOKEN, auth: oauth}\n"
+	if err := os.WriteFile(filepath.Join(e.dir, "models.yaml"), []byte(y), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runCLI(t, "config", "paseo", "--gateway-url", "http://gw:3000"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(e.home, ".paseo", "config.json")) //nolint:gosec // test path under temp HOME
+	if err != nil || !strings.Contains(string(b), "claude-jeefy-opus-5") || !strings.Contains(string(b), "http://gw:3000") {
+		t.Fatalf("passthrough model or gateway URL missing: %q %v", b, err)
+	}
+}

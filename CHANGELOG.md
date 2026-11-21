@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- `config <client> --gateway-url` now also reads the local `models.yaml` passthrough names (previously only without the flag), so `config paseo` lists them for a remote gateway. Keep the local file matching the gateway.
 - Documentation: `README.md` is now a short index; details moved to `docs/` pages (installation, quickstart, models, clients, cli, operations, insights, skills, system-prompt, security). Corrected the Continue config path (`~/.continue/config.yaml`), the `config` default gateway URL (`http://localhost:<port>`), the `doctor` check list, `oh-my-opencode` behavior (does not edit `omo.jsonc`) and missing flags in the CLI reference; removed a non-existent `logs/` directory from the file list.
 
 ## [0.6.0] - 2026-11-19
