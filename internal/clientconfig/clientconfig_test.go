@@ -60,6 +60,10 @@ var fixtures = []fixture{
 		"{\n  // my comment\n  \"agents\": {\"defaults\": {\"model\": {\"primary\": \"x/y\"}}},\n  \"models\": {\"providers\": {\"other\": {\"api\": \"x\",},},},\n}\n",
 		[]string{"// my comment", `"primary": "x/y"`, `"other": {"api": "x",}`},
 		[]string{`"convergence"`, "http://localhost:3000/v1", `"openai-completions"`, `"id": "auto"`, `"id": "heavy"`}, nil},
+	{"omp", ".omp/agent/models.yml",
+		"# omp custom models\nproviders:\n  other:\n    baseUrl: http://example.com/v1\n",
+		[]string{"# omp custom models", "baseUrl: http://example.com/v1"},
+		[]string{"convergence:", "baseUrl: http://localhost:3000/v1", "api: openai-completions", "id: auto", "id: heavy", "contextWindow: 128000", "reasoning: false"}, nil},
 }
 
 func setup(t *testing.T, f fixture, withFile bool) string {
@@ -285,7 +289,13 @@ func TestListReportsPointed(t *testing.T) {
 }
 
 func TestOpenClawDefaultModelOnlyWithFlag(t *testing.T) {
-	f := fixtures[len(fixtures)-1]
+	var f fixture
+	for _, fix := range fixtures {
+		if fix.client == "openclaw" {
+			f = fix
+			break
+		}
+	}
 	p := setup(t, f, true)
 	if _, err := Configure("openclaw", Options{GatewayURL: gw}); err != nil {
 		t.Fatal(err)

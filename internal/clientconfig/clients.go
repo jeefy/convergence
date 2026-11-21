@@ -92,6 +92,19 @@ func paseoModel(id, label string, def bool) map[string]any {
 	return m
 }
 
+// OMPAgentDir returns the agent directory omp uses: $PI_CODING_AGENT_DIR,
+// else $HOME/<PI_CONFIG_DIR>/agent (or ~/.omp/agent by default).
+func OMPAgentDir(h string) string {
+	if d := strings.TrimSpace(os.Getenv("PI_CODING_AGENT_DIR")); d != "" {
+		return d
+	}
+	cfgDir := strings.TrimSpace(os.Getenv("PI_CONFIG_DIR"))
+	if cfgDir == "" {
+		cfgDir = ".omp"
+	}
+	return filepath.Join(h, cfgDir, "agent")
+}
+
 var clients = []client{
 	{
 		name:   "opencode",
@@ -348,6 +361,41 @@ var clients = []client{
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "agents", "providers", PaseoClaude); return ok },
 		note: "Adds providers " + PaseoClaude + " and " + PaseoOpenCode + "; the built-in providers are untouched. " +
 			"Run `paseo reload` to apply. " + PaseoOpenCode + " needs `convergence config opencode` as well.",
+	},
+	{
+		name:   "omp",
+		format: YAML,
+		path: func(h string) string {
+			d := OMPAgentDir(h)
+			canonical := filepath.Join(d, "models.yml")
+			fallback := filepath.Join(d, "models.yaml")
+			if !exists(canonical) && exists(fallback) {
+				return fallback
+			}
+			return canonical
+		},
+		ops: func(_ Options, root string) []setOp {
+			return []setOp{{
+				path: []string{"providers", Key},
+				val: map[string]any{
+					"baseUrl": root + "/v1",
+					"apiKey":  Key,
+					"api":     "openai-completions",
+					"models": []any{
+						map[string]any{"id": "auto", "name": "Convergence Auto", "contextWindow": 128000, "maxTokens": 16384, "reasoning": false, "input": []string{"text"}},
+						map[string]any{"id": "pinball", "name": "Convergence Pinball", "contextWindow": 128000, "maxTokens": 16384, "reasoning": false, "input": []string{"text"}},
+						map[string]any{"id": "light", "name": "Convergence Light", "contextWindow": 128000, "maxTokens": 16384, "reasoning": false, "input": []string{"text"}},
+						map[string]any{"id": "standard", "name": "Convergence Standard", "contextWindow": 128000, "maxTokens": 16384, "reasoning": false, "input": []string{"text"}},
+						map[string]any{"id": "heavy", "name": "Convergence Heavy", "contextWindow": 128000, "maxTokens": 16384, "reasoning": false, "input": []string{"text"}},
+					},
+				},
+			}}
+		},
+		pointed: func(d map[string]any) bool {
+			_, ok := lookup(d, "providers", Key)
+			return ok
+		},
+		note: "Models: convergence/auto, convergence/pinball, convergence/light, convergence/standard, convergence/heavy. Use `--model convergence/auto` or pick one with `/model`.",
 	},
 }
 

@@ -201,5 +201,6 @@ omo.jsonc to "convergence/auto" or "convergence/pinball".`))
 				}
 			}
 		})
+	addClientCmd("omp", "Add a `convergence` provider to ~/.omp/agent/models.yml", nil, nil)
 	rootCmd.AddCommand(configCmd)
 }

@@ -96,6 +96,9 @@ run_suite() {
   export HOME="$TEST_HOME"
   # Never the real Paseo daemon config, also when run from a Paseo agent.
   export PASEO_HOME="$TEST_HOME/.paseo"
+  # Likewise for omp, whose agent directory can be moved by these variables.
+  export PI_CODING_AGENT_DIR="$TEST_HOME/.omp/agent"
+  unset PI_CONFIG_DIR
   local cfgdir="$TEST_HOME/.convergence"
   local compose_args=()
   local original_docker_host="${DOCKER_HOST-}" docker_host_set="${DOCKER_HOST+x}"
@@ -330,6 +333,27 @@ assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["cont
   "$BIN" config list | grep -q 'paseo .*convergence=true' || fail "config list does not show paseo as configured"
   "$BIN" config paseo restore >/dev/null
   [ ! -e "$pc" ] || fail "config paseo restore left a file it created"
+
+  echo "==> config omp: provider in \$PI_CODING_AGENT_DIR/models.yml, other providers kept, served models, restore"
+  local om="$PI_CODING_AGENT_DIR/models.yml" omp_models
+  mkdir -p "$PI_CODING_AGENT_DIR"
+  printf '# mine\nproviders:\n  other:\n    baseUrl: http://example.invalid/v1\n    apiKey: OTHER_KEY\n    api: openai-completions\n    models:\n      - id: x\n' >"$om"
+  cp "$om" "$TEST_HOME/omp-original.yml"
+  bin_has 'dry-run' config omp --dry-run || fail "config omp dry-run output"
+  cmp -s "$om" "$TEST_HOME/omp-original.yml" || fail "config omp --dry-run changed models.yml"
+  "$BIN" config omp >/dev/null
+  grep -q "baseUrl: http://localhost:$GW/v1" "$om" || fail "omp provider not pointed at the gateway"
+  grep -q '^# mine' "$om" && grep -q 'apiKey: OTHER_KEY' "$om" || fail "config omp dropped the user's comment or provider"
+  bin_has 'already up to date' config omp || fail "config omp not idempotent"
+  "$BIN" config list | grep -q 'omp .*convergence=true' || fail "config list does not show omp as configured"
+  # every model id written for omp must be one the gateway serves
+  omp_models="$(curl -sf "http://127.0.0.1:$GW/v1/models")" || fail "gateway /v1/models failed"
+  for id in $(sed -n '/^  convergence:/,$s/^[ -]*id: //p' "$om" | tr -d '"'); do
+    echo "$omp_models" | python3 -c 'import json,sys; ids={m["id"] for m in json.load(sys.stdin)["data"]}; sys.exit(0 if sys.argv[1] in ids else 1)' "$id" \
+      || fail "omp model $id is not served by the gateway: $omp_models"
+  done
+  "$BIN" config omp restore >/dev/null
+  cmp -s "$om" "$TEST_HOME/omp-original.yml" || fail "config omp restore did not recover the original models.yml"
 
   echo "==> skills: scan needs the image, build it, scan upstream fixtures"
   local skills="$TEST_HOME/.claude/skills" scan_out
