@@ -11,6 +11,7 @@ type entry struct {
 	Ref          string // agentgateway provider name serving it
 	Upstream     string
 	PromptTokens int
+	OAuth        bool // subscription token: Anthropic needs its Claude Code system block first, so no system prompt is prepended
 }
 
 type templateData struct {
@@ -61,10 +62,10 @@ func newTemplateData(opts *ClusterOptions, res *models.Resolved) *templateData {
 		case models.UpstreamAnthropic:
 			ref = "anthropic-direct"
 		}
-		d.Entries = append(d.Entries, entry{m.PinballName, ref, m.UpstreamModel, m.PromptTokens})
+		d.Entries = append(d.Entries, entry{m.PinballName, ref, m.UpstreamModel, m.PromptTokens, false})
 	}
 	for _, p := range res.Passthrough {
-		d.Passthrough = append(d.Passthrough, entry{Name: p.Name, Ref: p.Ref(refFor(p.Provider)), Upstream: p.Model})
+		d.Passthrough = append(d.Passthrough, entry{Name: p.Name, Ref: p.Ref(refFor(p.Provider)), Upstream: p.Model, OAuth: p.Auth == models.AuthOAuth})
 	}
 	return d
 }

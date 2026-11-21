@@ -120,6 +120,12 @@ stringData:
         timeout:
           responseIdleTimeout: 120s
         transformations:
+{{- with .R.OAuthBetaCEL }}
+          request:
+            set:
+              # auth: oauth passthrough models: append oauth-2025-04-20 to the client's anthropic-beta.
+              anthropic-beta: '{{ . }}'
+{{- end }}
           response:
             set:
               # Surface Pinball's pick to clients: with model=auto the body says the real model, which
@@ -175,12 +181,23 @@ stringData:
 {{- range .Endpoints }}
         - name: {{ .Endpoint }}
           provider: {{ if eq .Provider "openai" }}openAI{{ else }}{{ .Provider }}{{ end }}
+{{- if or .BaseURL (and .KeyEnv (ne .Auth "oauth")) }}
           params:
 {{- if .BaseURL }}
             baseUrl: {{ .BaseURL }}
 {{- end }}
-{{- if .KeyEnv }}
+{{- if and .KeyEnv (ne .Auth "oauth") }}
             apiKey: "${{ "{" }}{{ .KeyEnv }}{{ "}" }}"
+{{- end }}
+{{- end }}
+{{- if eq .Auth "oauth" }}
+          # Claude subscription token: Bearer auth. The oauth beta header is appended
+          # by llm.policies.transformations.request (keeps the client's own betas).
+          defaults:
+            auth:
+              key:
+                value: "${{ "{" }}{{ .KeyEnv }}{{ "}" }}"
+                location: {header: {name: Authorization, prefix: "Bearer "}}
 {{- end }}
 {{- end }}
       virtualModels:
@@ -246,8 +263,10 @@ stringData:
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
 {{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- if not .OAuth }}
 {{- with $.SystemPrompt.YAMLTransformation 10 }}
 {{ . }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if .DiscoverModels }}
