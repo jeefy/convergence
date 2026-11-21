@@ -1,3 +1,10 @@
+{{- define "effortKey" }}
+            reasoning_effort: 'extauthz.reasoning_effort'
+{{- end }}
+{{- define "effortOnly" }}
+          finalTransformation:
+            reasoning_effort: 'extauthz.reasoning_effort'
+{{- end }}
 {{- define "copilotSystem" }}
           finalTransformation:
             messages: |-
@@ -145,6 +152,9 @@ stringData:
                     reason: 'json(response.body).reason'
                     score: 'json(response.body).score'
                     est_tokens: 'json(response.body).est_tokens'
+{{- if .R.NormalizeReasoningEffort }}
+                    reasoning_effort: 'json(response.body).reasoning_effort'
+{{- end }}
       providers:
 {{- if eq .Provider "copilot" }}
         - name: copilot-completions
@@ -221,7 +231,7 @@ stringData:
           visibility: internal
           provider: {reference: {{ .Ref }}}
           params: {model: {{ .Upstream }}}
-{{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ end }}
+{{- if eq .Ref "copilot-completions" }}{{ template "copilotSystem" }}{{ if $.R.NormalizeReasoningEffort }}{{ template "effortKey" }}{{ end }}{{ else if $.R.NormalizeReasoningEffort }}{{ template "effortOnly" }}{{ end }}
 {{- with $.SystemPrompt.YAMLTransformation 10 }}
 {{ . }}
 {{- end }}
@@ -255,7 +265,7 @@ stringData:
         # is sent upstream as is. Other ids go to copilot-api unchanged.
         - name: pinball-live
           visibility: internal
-          provider: {reference: copilot-completions}{{ template "copilotSystem" }}
+          provider: {reference: copilot-completions}{{ template "copilotSystem" }}{{ if $.R.NormalizeReasoningEffort }}{{ template "effortKey" }}{{ end }}
 {{- with $.SystemPrompt.YAMLTransformationModel 10 "default(extauthz.model, llmRequest.model)" }}
 {{ . }}
 {{- end }}

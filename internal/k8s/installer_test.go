@@ -837,3 +837,33 @@ func TestPinballKeywordsRenderedFromModelsFile(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeReasoningEffortRendered(t *testing.T) {
+	opts := func(models string) *ClusterOptions {
+		o := &ClusterOptions{Namespace: "x", Provider: "copilot", CopilotToken: "t"}
+		if models != "" {
+			o.ModelsFile = modelsFile(t, models)
+		}
+		return o
+	}
+	def, err := RenderManifests(opts(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(def, "reasoning_effort") {
+		t.Error("reasoning_effort must not be rendered by default")
+	}
+	on, err := RenderManifests(opts("pinball:\n  normalize_reasoning_effort: true\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(on, "reasoning_effort: 'json(response.body).reasoning_effort'") {
+		t.Error("extAuthz metadata must copy reasoning_effort")
+	}
+	if n, m := strings.Count(on, "finalTransformation:"), strings.Count(on, "reasoning_effort: 'extauthz.reasoning_effort'"); n == 0 || n != m {
+		t.Errorf("finalTransformation blocks %d, with reasoning_effort %d", n, m)
+	}
+	if !strings.Contains(on, "messages: |-\n") {
+		t.Error("copilot messages transformation lost")
+	}
+}

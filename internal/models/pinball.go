@@ -21,6 +21,8 @@ type Pinball struct {
 	// Keyword lists replace pinball's defaults when set; `[]` turns that signal off.
 	HeavyKeywords *[]string `yaml:"heavy_keywords"`
 	LightKeywords *[]string `yaml:"light_keywords"`
+	// NormalizeReasoningEffort: see Resolved.NormalizeReasoningEffort.
+	NormalizeReasoningEffort bool `yaml:"normalize_reasoning_effort"`
 }
 
 // scoringDefaults are pinball's defaults; only used to validate cutoff order.
@@ -109,6 +111,7 @@ func (r *Resolved) ApplyPinball(p *Pinball) error {
 	}
 	r.Scoring = p.Scoring
 	r.HeavyKeywords, r.LightKeywords = p.HeavyKeywords, p.LightKeywords
+	r.NormalizeReasoningEffort = p.NormalizeReasoningEffort
 	return nil
 }
 
