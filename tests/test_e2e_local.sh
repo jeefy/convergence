@@ -129,7 +129,7 @@ run_suite() {
 
   echo "==> convergence init (provider ollama -> stub on host port $sport)"
   local ptoken=""
-  if "$BIN" init --help 2>&1 | grep -q -- '--yes'; then
+  if bin_has '--yes' init --help; then
     # a token Stand-In would scrub in a user message: the system prompt is added after
     # scrubbing, so it must reach the upstream verbatim (documented: keep secrets out of it)
     ptoken="ghp_$(python3 -c 'import secrets,string; print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
