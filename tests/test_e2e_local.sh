@@ -134,6 +134,14 @@ run_suite() {
     # scrubbing, so it must reach the upstream verbatim (documented: keep secrets out of it)
     ptoken="ghp_$(python3 -c 'import secrets,string; print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(36)))')"
     printf 'prompt token %s\nE2E-EXTRA-PROMPT-LINE\n' "$ptoken" >"$TEST_HOME/extra-prompt.txt"
+    # Two Claude subscription accounts (auth: oauth passthrough) served by the stub.
+    mkdir -p "$cfgdir"
+    cat >"$cfgdir/models.yaml" <<MODELS
+passthrough:
+  claude-e2e-a: {provider: anthropic, model: claude-sonnet-4-5, base_url: "http://host.docker.internal:$sport/v1", api_key_env: CLAUDE_E2E_A_TOKEN, auth: oauth}
+  claude-e2e-b: {provider: anthropic, model: claude-sonnet-4-5, base_url: "http://host.docker.internal:$sport/v1", api_key_env: CLAUDE_E2E_B_TOKEN, auth: oauth}
+MODELS
+    export CLAUDE_E2E_A_TOKEN=e2e-oauth-token-a CLAUDE_E2E_B_TOKEN=e2e-oauth-token-b
     "$BIN" init --yes --provider ollama --ollama-url "http://host.docker.internal:$sport" --engine "$engine" "${compose_args[@]}" \
       --system-prompt --system-prompt-file "$TEST_HOME/extra-prompt.txt"
     grep -q '^system_prompt:' "$cfgdir/config.yaml" || fail "system_prompt not persisted in config.yaml"
@@ -161,6 +169,27 @@ run_suite() {
   "$BIN" status
   if [ "$engine" = podman ] && [ "$COMPOSE_PROVIDER" = podman-compose ]; then
     [ ! -e "$unavailable_socket" ] || fail "podman-compose unexpectedly created an API socket"
+  fi
+
+  if [ -f "$cfgdir/models.yaml" ]; then
+    echo "==> Two Claude accounts (auth: oauth passthrough)"
+    local m code hl
+    for m in claude-e2e-a claude-e2e-b; do
+      code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$GW/v1/messages" \
+        -H 'Authorization: Bearer sk-convergence' -H 'anthropic-version: 2023-06-01' \
+        -H 'anthropic-beta: claude-code-20250219,interleaved-thinking-2025-05-14' -H 'Content-Type: application/json' \
+        -d "{\"model\":\"$m\",\"max_tokens\":5,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}")"
+      [ "$code" = 200 ] || fail "$m: HTTP $code"
+    done
+    hl="$(curl -sf "http://127.0.0.1:$sport/_headers")" || fail "stub /_headers"
+    echo "$hl"
+    # each account gets its own token; Claude Code's betas are kept and the oauth beta appended
+    local beta='"anthropic-beta": "claude-code-20250219,interleaved-thinking-2025-05-14,oauth-2025-04-20"'
+    echo "$hl" | grep -F "$beta" | grep -q '"authorization": "Bearer e2e-oauth-token-a"' \
+      || fail "account a: wrong token or anthropic-beta"
+    echo "$hl" | grep -F "$beta" | grep -q '"authorization": "Bearer e2e-oauth-token-b"' \
+      || fail "account b: wrong token or anthropic-beta"
+    if echo "$hl" | grep -q 'sk-convergence'; then fail "client key leaked upstream"; fi
   fi
 
   echo "==> Testing sandbox status & list"
