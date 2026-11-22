@@ -733,6 +733,39 @@ func TestTracingCarriesPinballScoreAndEstTokens(t *testing.T) {
 	}
 }
 
+func TestOAuthPassthroughAppendsBeta(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	y := "passthrough:\n  claude-a: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_A_TOKEN, auth: oauth}\n  claude-b: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_B_TOKEN, auth: oauth}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "agentgateway.yaml"))
+	ag := string(b)
+	for _, want := range []string{
+		`anthropic-beta: 'json(request.body).model in ["claude-a", "claude-b"] ? `,
+		`request.headers["anthropic-beta"] + ",oauth-2025-04-20"`,
+		"value: \"${CLAUDE_A_TOKEN}\"",
+		"value: \"${CLAUDE_B_TOKEN}\"",
+	} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	// A fixed provider header would replace Claude Code's own betas.
+	if strings.Contains(ag, "set: {anthropic-beta:") {
+		t.Error("oauth endpoints must not set a fixed anthropic-beta")
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal(b, &parsed); err != nil {
+		t.Fatalf("agentgateway.yaml is not valid YAML: %v", err)
+	}
+}
+
 func TestNormalizeReasoningEffort(t *testing.T) {
 	off, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
 	if strings.Contains(files["agentgateway.yaml"], "reasoning_effort") {

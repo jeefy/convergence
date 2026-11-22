@@ -129,3 +129,13 @@ passthrough:
 ```
 
 Local: export `OLLAMA_CLOUD_KEY` when running `init`, `restart` or `upgrade`; it is written to the 0600 `.env` (an existing value is kept if the variable is unset) and the rendered config only contains `${OLLAMA_CLOUD_KEY}`. Cluster: create the Secret yourself, e.g. `kubectl -n convergence create secret generic convergence-passthrough --from-literal=OLLAMA_CLOUD_KEY=...` (name via `--passthrough-secret`); the gateway reads each key from its environment. Keys never appear in rendered config or manifests. `STANDIN_SALT`, `GH_TOKEN`, `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are not allowed as `api_key_env`.
+
+**Two Claude Code accounts.** An `anthropic` entry with `auth: oauth` sends its key as `Authorization: Bearer` with `anthropic-beta: oauth-2025-04-20` (a Claude subscription token from `claude setup-token`) instead of `x-api-key`. The beta flag is appended to the client's own `anthropic-beta` value (Claude Code sends several), not substituted for it. The client's Convergence key is replaced by the account token and never reaches Anthropic. Give each account its own `api_key_env`; the client picks the account by model name.
+
+```yaml
+passthrough:
+  claude-lf-sonnet:    {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_LF_TOKEN,    auth: oauth}
+  claude-jeefy-sonnet: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_JEEFY_TOKEN, auth: oauth}
+```
+
+`auth: oauth` requires `provider: anthropic` and `api_key_env`. If you set `base_url`, include `/v1` (agentgateway appends `/messages`). Passthrough names may contain only letters, digits and `. _ : / -`. Omit `auth` to use a plain Anthropic API key from `api_key_env` (`x-api-key`). Run Claude Code with `ANTHROPIC_MODEL=claude-lf-sonnet`. Whether Anthropic permits subscription tokens through a gateway is governed by their terms; check them first.

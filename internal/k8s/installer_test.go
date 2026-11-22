@@ -530,6 +530,45 @@ func TestModelsFilePassthroughEndpoint(t *testing.T) {
 	}
 }
 
+func TestModelsFileTwoClaudeAccounts(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "m.yaml")
+	y := "passthrough:\n  claude-lf-sonnet: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_LF_TOKEN, auth: oauth}\n  claude-jeefy-sonnet: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_JEEFY_TOKEN, auth: oauth}\n"
+	if err := os.WriteFile(f, []byte(y), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot", ModelsFile: f, SystemPrompt: prompts.Settings{Enabled: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := strings.Index(out, "- name: claude-lf-sonnet"); i < 0 || strings.Contains(out[i:i+200], "transformation:") {
+		t.Error("oauth model must not get the system prompt transformation")
+	}
+	for _, want := range []string{
+		"- name: anthropic-ep1\n          provider: anthropic\n",
+		"value: \"${CLAUDE_JEEFY_TOKEN}\"",
+		"- name: anthropic-ep2\n          provider: anthropic\n",
+		"value: \"${CLAUDE_LF_TOKEN}\"",
+		`anthropic-beta: 'json(request.body).model in ["claude-jeefy-sonnet", "claude-lf-sonnet"] ? `,
+		"- name: claude-lf-sonnet\n          provider: {reference: anthropic-ep2}",
+		"- name: claude-jeefy-sonnet\n          provider: {reference: anthropic-ep1}",
+		"key: CLAUDE_LF_TOKEN",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+}
+
+func TestModelsFileOAuthKeepsClientBetas(t *testing.T) {
+	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "anthropic-beta") {
+		t.Error("no oauth passthrough: anthropic-beta must not be touched")
+	}
+}
+
 func TestManifestsCopilotProviderOverride(t *testing.T) {
 	out, err := RenderManifests(&ClusterOptions{Namespace: "x", Provider: "copilot"})
 	if err != nil {
