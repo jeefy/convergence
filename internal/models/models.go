@@ -9,6 +9,7 @@ package models
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/jeefy/convergence/internal/config"
@@ -55,6 +56,9 @@ type Resolved struct {
 	// unset renders nothing. Sticky needs a Pinball image newer than 0.8.0.
 	Sticky  *Sticky
 	Wrapped []WrappedUserMessage
+	// NormalizeReasoningEffort (models.yaml `pinball.normalize_reasoning_effort`) makes the gateway
+	// send Pinball's per-model reasoning_effort upstream. Needs a Pinball image newer than 0.8.0.
+	NormalizeReasoningEffort bool
 	// Fallback is the PinballName used when pinball is unreachable.
 	Fallback string
 	// Passthrough are fixed-name models without Pinball (models.yaml `passthrough:`).
@@ -275,6 +279,31 @@ func validateOverrides(o Overrides) error {
 
 // Endpoints lists the custom passthrough endpoints (one provider block each).
 func (r *Resolved) Endpoints() []Passthrough { return Endpoints(r.Passthrough) }
+
+// OAuthBeta is the anthropic-beta flag a Claude subscription token needs.
+const OAuthBeta = "oauth-2025-04-20"
+
+// OAuthBetaCEL returns a CEL expression for the anthropic-beta request header:
+// for requests to an `auth: oauth` passthrough model it appends OAuthBeta to the
+// client's own betas (Claude Code sends e.g. claude-code-*, interleaved-thinking-*);
+// a fixed provider requestHeaders value would replace them. For other models it
+// evaluates to the client's header, and fails when that is absent, which leaves
+// the header unset (verified against agentgateway v1.6.0). "" without oauth entries.
+func (r *Resolved) OAuthBetaCEL() string {
+	var names []string
+	for _, p := range r.Passthrough {
+		if p.Auth == AuthOAuth {
+			names = append(names, strconv.Quote(p.Name))
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	h := `request.headers["anthropic-beta"]`
+	b := strconv.Quote(OAuthBeta)
+	return fmt.Sprintf(`json(request.body).model in [%s] ? (default(%s, "") == "" ? %s : (%s.contains(%s) ? %s : %s + ",%s")) : %s`,
+		strings.Join(names, ", "), h, b, h, b, h, h, OAuthBeta, h)
+}
 
 // KeyEnvs lists the env var names passthrough endpoints read their API keys from.
 func (r *Resolved) KeyEnvs() []string { return KeyEnvs(r.Passthrough) }

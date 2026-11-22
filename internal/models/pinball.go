@@ -22,6 +22,8 @@ type Pinball struct {
 	// Keyword lists replace pinball's defaults when set; `[]` turns that signal off.
 	HeavyKeywords *[]string `yaml:"heavy_keywords"`
 	LightKeywords *[]string `yaml:"light_keywords"`
+	// NormalizeReasoningEffort: see Resolved.NormalizeReasoningEffort.
+	NormalizeReasoningEffort bool `yaml:"normalize_reasoning_effort"`
 	// Sticky keeps a conversation on its tier and model (pinball newer than 0.8.0).
 	Sticky *Sticky `yaml:"sticky"`
 	// WrappedUserMessages marks user messages that are mostly client scaffolding.
@@ -144,6 +146,7 @@ func (r *Resolved) ApplyPinball(p *Pinball) error {
 	r.Sticky, r.Wrapped = p.Sticky, p.WrappedUserMessages
 	r.Scoring = p.Scoring
 	r.HeavyKeywords, r.LightKeywords = p.HeavyKeywords, p.LightKeywords
+	r.NormalizeReasoningEffort = p.NormalizeReasoningEffort
 	return nil
 }
 

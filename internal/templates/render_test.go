@@ -753,3 +753,64 @@ func TestPinballStickyAndWrappedRendered(t *testing.T) {
 		}
 	}
 }
+
+func TestOAuthPassthroughAppendsBeta(t *testing.T) {
+	dir, _ := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	y := "passthrough:\n  claude-a: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_A_TOKEN, auth: oauth}\n  claude-b: {provider: anthropic, model: claude-sonnet-4-5, api_key_env: CLAUDE_B_TOKEN, auth: oauth}\n"
+	if err := os.WriteFile(filepath.Join(dir, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, dir); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "agentgateway.yaml"))
+	ag := string(b)
+	for _, want := range []string{
+		`anthropic-beta: 'json(request.body).model in ["claude-a", "claude-b"] ? `,
+		`request.headers["anthropic-beta"] + ",oauth-2025-04-20"`,
+		"value: \"${CLAUDE_A_TOKEN}\"",
+		"value: \"${CLAUDE_B_TOKEN}\"",
+	} {
+		if !strings.Contains(ag, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	// A fixed provider header would replace Claude Code's own betas.
+	if strings.Contains(ag, "set: {anthropic-beta:") {
+		t.Error("oauth endpoints must not set a fixed anthropic-beta")
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal(b, &parsed); err != nil {
+		t.Fatalf("agentgateway.yaml is not valid YAML: %v", err)
+	}
+}
+
+func TestNormalizeReasoningEffort(t *testing.T) {
+	off, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	if strings.Contains(files["agentgateway.yaml"], "reasoning_effort") {
+		t.Error("reasoning_effort must not be rendered by default")
+	}
+	y := "pinball:\n  normalize_reasoning_effort: true\n"
+	if err := os.WriteFile(filepath.Join(off, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, off); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(off, "agentgateway.yaml"))
+	ag := string(b)
+	if !strings.Contains(ag, "reasoning_effort: 'json(response.body).reasoning_effort'") {
+		t.Error("extAuthz metadata must copy reasoning_effort")
+	}
+	// merged into the Copilot finalTransformation, not a second key
+	if strings.Count(ag, "finalTransformation:") != strings.Count(ag, "reasoning_effort: 'extauthz.reasoning_effort'") {
+		t.Errorf("every finalTransformation must carry reasoning_effort:\n%s", ag)
+	}
+	if !strings.Contains(ag, "messages: |-\n") {
+		t.Error("copilot messages transformation lost")
+	}
+}

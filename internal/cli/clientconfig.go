@@ -28,22 +28,22 @@ type configFlags struct {
 
 func (f configFlags) options() (clientconfig.Options, error) {
 	url := f.gatewayURL
-	var passthrough []string
 	if url == "" {
 		cfg, err := config.LoadConfig()
 		if err != nil {
 			return clientconfig.Options{}, err
 		}
 		url = fmt.Sprintf("http://localhost:%d", cfg.GatewayPort)
-		if passthrough, err = localPassthrough(); err != nil {
-			return clientconfig.Options{}, err
-		}
+	}
+	passthrough, err := localPassthrough()
+	if err != nil {
+		return clientconfig.Options{}, err
 	}
 	return clientconfig.Options{GatewayURL: url, Passthrough: passthrough, SetDefault: f.setDefault, DryRun: f.dryRun, Force: f.force}, nil
 }
 
-// localPassthrough lists the passthrough model names of the local stack
-// (models.yaml). With --gateway-url the gateway's models are not known here.
+// localPassthrough lists the passthrough model names in the local models.yaml,
+// also with --gateway-url: the file is the source for the gateway it was rendered into.
 func localPassthrough() ([]string, error) {
 	dir, err := config.GetConfigDir()
 	if err != nil {

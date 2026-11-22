@@ -21,6 +21,9 @@ type Passthrough struct {
 	// NAME of the env var holding its API key (never the key itself).
 	BaseURL string
 	KeyEnv  string
+	// Auth is "" (provider default, x-api-key) or "oauth" (anthropic only: the key is a Claude
+	// subscription token sent as Authorization: Bearer with the oauth beta header).
+	Auth string
 	// Endpoint is the agentgateway provider name of a custom endpoint ("" = shared family provider).
 	Endpoint string
 }
@@ -30,7 +33,14 @@ type passthroughEntry struct {
 	Model    string `yaml:"model"`
 	BaseURL  string `yaml:"base_url"`
 	KeyEnv   string `yaml:"api_key_env"`
+	Auth     string `yaml:"auth"`
 }
+
+// AuthOAuth marks a Claude subscription token (from `claude setup-token`).
+const AuthOAuth = "oauth"
+
+// modelName keeps passthrough names safe to render unquoted in YAML and inside CEL strings.
+var modelName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*$`)
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -60,6 +70,9 @@ func ParsePassthrough(data []byte) ([]Passthrough, error) {
 	}
 	var out []Passthrough
 	for name, e := range m {
+		if !modelName.MatchString(name) {
+			return nil, fmt.Errorf("models.yaml: passthrough: name %q may only contain letters, digits and . _ : / -", name)
+		}
 		if reserved[name] || strings.HasPrefix(name, "pinball-") {
 			return nil, fmt.Errorf("models.yaml: passthrough: name %q collides with a pinball model name", name)
 		}
@@ -71,7 +84,16 @@ func ParsePassthrough(data []byte) ([]Passthrough, error) {
 		if strings.TrimSpace(e.Model) == "" {
 			return nil, fmt.Errorf("models.yaml: passthrough.%s: empty model", name)
 		}
-		p := Passthrough{Name: name, Provider: e.Provider, Model: strings.TrimSpace(e.Model), BaseURL: strings.TrimSpace(e.BaseURL), KeyEnv: strings.TrimSpace(e.KeyEnv)}
+		p := Passthrough{Name: name, Provider: e.Provider, Model: strings.TrimSpace(e.Model), BaseURL: strings.TrimSpace(e.BaseURL), KeyEnv: strings.TrimSpace(e.KeyEnv), Auth: strings.TrimSpace(e.Auth)}
+		switch p.Auth {
+		case "":
+		case AuthOAuth:
+			if p.Provider != UpstreamAnthropic || p.KeyEnv == "" {
+				return nil, fmt.Errorf("models.yaml: passthrough.%s: auth: oauth needs provider anthropic and api_key_env", name)
+			}
+		default:
+			return nil, fmt.Errorf("models.yaml: passthrough.%s: unknown auth %q (want oauth)", name, p.Auth)
+		}
 		if p.BaseURL != "" {
 			if u, err := url.Parse(p.BaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				return nil, fmt.Errorf("models.yaml: passthrough.%s: base_url %q must be an http(s) URL", name, p.BaseURL)
@@ -86,14 +108,14 @@ func ParsePassthrough(data []byte) ([]Passthrough, error) {
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	// One provider per distinct (provider, base_url, api_key_env).
-	seen := map[[3]string]string{}
+	// One provider per distinct (provider, base_url, api_key_env, auth).
+	seen := map[[4]string]string{}
 	for i := range out {
 		p := &out[i]
 		if p.BaseURL == "" && p.KeyEnv == "" {
 			continue
 		}
-		k := [3]string{p.Provider, p.BaseURL, p.KeyEnv}
+		k := [4]string{p.Provider, p.BaseURL, p.KeyEnv, p.Auth}
 		if seen[k] == "" {
 			seen[k] = fmt.Sprintf("%s-ep%d", p.Provider, len(seen)+1)
 		}

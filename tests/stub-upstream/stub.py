@@ -1,10 +1,12 @@
 """OpenAI-compatible stub upstream (stdlib only). Echoes the last user message.
 Records every received request body to /data/received.log (one JSON per line)
-and serves it at GET /_received."""
+and serves it at GET /_received. Anthropic /messages requests are logged only as
+auth headers, to /tmp/headers.log (GET /_headers)."""
 import json, sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = "/tmp/received.log"
+HLOG = "/tmp/headers.log"
 
 
 class H(BaseHTTPRequestHandler):
@@ -24,9 +26,9 @@ class H(BaseHTTPRequestHandler):
         if self.path.startswith("/v1/models") or self.path == "/api/tags":
             m = [{"id": "stub", "object": "model"}]
             self._send(200, json.dumps({"object": "list", "data": m, "models": [{"name": "stub"}]}).encode())
-        elif self.path == "/_received":
+        elif self.path in ("/_received", "/_headers"):
             try:
-                data = open(LOG, "rb").read()
+                data = open(LOG if self.path == "/_received" else HLOG, "rb").read()
             except FileNotFoundError:
                 data = b""
             self._send(200, data, "text/plain")
@@ -36,12 +38,23 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(n)
-        with open(LOG, "ab") as f:
-            f.write(raw.replace(b"\n", b" ") + b"\n")
+        if not self.path.rstrip("/").endswith("/messages"):
+            with open(LOG, "ab") as f:
+                f.write(raw.replace(b"\n", b" ") + b"\n")
         try:
             req = json.loads(raw)
         except ValueError:
             return self._send(400, b'{"error":"bad json"}')
+        if self.path.rstrip("/").endswith("/messages"):
+            # Anthropic Messages (passthrough endpoints with provider anthropic)
+            h = {k: self.headers.get(k, "") for k in ("authorization", "x-api-key", "anthropic-beta")}
+            h["model"] = req.get("model", "")
+            with open(HLOG, "a") as f:
+                f.write(json.dumps(h, sort_keys=True) + "\n")
+            resp = {"id": "msg-stub", "type": "message", "role": "assistant", "model": h["model"],
+                    "content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 7, "output_tokens": 5}}
+            return self._send(200, json.dumps(resp).encode())
         if self.path.rstrip("/").endswith("/responses"):
             # OpenAI Responses API: agentgateway converts Anthropic /v1/messages into this
             resp = {"id": "resp-stub", "object": "response", "created_at": 1, "status": "completed",

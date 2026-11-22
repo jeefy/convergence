@@ -198,6 +198,9 @@ func TestPassthroughEndpointValidation(t *testing.T) {
 		"passthrough:\n  a: {provider: ollama, model: m, api_key_env: OPENAI_API_KEY}\n",
 		"passthrough:\n  a: {provider: ollama, model: m, base_url: ollama.com}\n",
 		"passthrough:\n  a: {provider: copilot, model: m, base_url: 'https://x'}\n",
+		"passthrough:\n  a: {provider: anthropic, model: m, auth: oauth}\n",
+		"passthrough:\n  a: {provider: openai, model: m, api_key_env: K, auth: oauth}\n",
+		"passthrough:\n  a: {provider: anthropic, model: m, api_key_env: K, auth: basic}\n",
 	} {
 		if _, err := ParsePassthrough([]byte(y)); err == nil {
 			t.Errorf("want error for %q", y)
@@ -290,5 +293,28 @@ func TestPinballStickyAndWrappedUserMessages(t *testing.T) {
 		if _, err := apply(bad); err == nil {
 			t.Errorf("expected an error for %q", bad)
 		}
+	}
+}
+
+func TestPassthroughRejectsUnsafeName(t *testing.T) {
+	for _, n := range []string{`"x'y"`, `"a b"`, `"-x"`} {
+		if _, err := ParsePassthrough([]byte("passthrough:\n  " + n + ": {provider: copilot, model: m}\n")); err == nil {
+			t.Errorf("want error for name %s", n)
+		}
+	}
+	if _, err := ParsePassthrough([]byte("passthrough:\n  glm-5.2:cloud: {provider: copilot, model: m}\n")); err != nil {
+		t.Errorf("valid name rejected: %v", err)
+	}
+}
+
+func TestOAuthBetaCEL(t *testing.T) {
+	r := &Resolved{Passthrough: []Passthrough{{Name: "k", Provider: UpstreamAnthropic}}}
+	if r.OAuthBetaCEL() != "" {
+		t.Error("no oauth entries: want empty expression")
+	}
+	r.Passthrough = append(r.Passthrough, Passthrough{Name: "claude-a", Provider: UpstreamAnthropic, Auth: AuthOAuth})
+	got := r.OAuthBetaCEL()
+	if !strings.HasPrefix(got, `json(request.body).model in ["claude-a"] ? `) || strings.Contains(got, `"k"`) || strings.Contains(got, "'") {
+		t.Errorf("unexpected CEL: %s", got)
 	}
 }
