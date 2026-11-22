@@ -765,3 +765,31 @@ func TestOAuthPassthroughAppendsBeta(t *testing.T) {
 		t.Fatalf("agentgateway.yaml is not valid YAML: %v", err)
 	}
 }
+
+func TestNormalizeReasoningEffort(t *testing.T) {
+	off, files := render(t, func(c *config.Config) { c.Provider = config.ProviderCopilot })
+	if strings.Contains(files["agentgateway.yaml"], "reasoning_effort") {
+		t.Error("reasoning_effort must not be rendered by default")
+	}
+	y := "pinball:\n  normalize_reasoning_effort: true\n"
+	if err := os.WriteFile(filepath.Join(off, "models.yaml"), []byte(y), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.DefaultConfig()
+	cfg.Provider = config.ProviderCopilot
+	if err := RenderAssets(cfg, off); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(off, "agentgateway.yaml"))
+	ag := string(b)
+	if !strings.Contains(ag, "reasoning_effort: 'json(response.body).reasoning_effort'") {
+		t.Error("extAuthz metadata must copy reasoning_effort")
+	}
+	// merged into the Copilot finalTransformation, not a second key
+	if strings.Count(ag, "finalTransformation:") != strings.Count(ag, "reasoning_effort: 'extauthz.reasoning_effort'") {
+		t.Errorf("every finalTransformation must carry reasoning_effort:\n%s", ag)
+	}
+	if !strings.Contains(ag, "messages: |-\n") {
+		t.Error("copilot messages transformation lost")
+	}
+}

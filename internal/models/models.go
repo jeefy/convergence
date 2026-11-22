@@ -52,6 +52,9 @@ type Resolved struct {
 	// HeavyKeywords and LightKeywords come from models.yaml `pinball.heavy_keywords` /
 	// `pinball.light_keywords`; nil renders pinball's defaults, empty turns the signal off.
 	HeavyKeywords, LightKeywords *[]string
+	// NormalizeReasoningEffort (models.yaml `pinball.normalize_reasoning_effort`) makes the gateway
+	// send Pinball's per-model reasoning_effort upstream. Needs a Pinball image newer than 0.8.0.
+	NormalizeReasoningEffort bool
 	// Fallback is the PinballName used when pinball is unreachable.
 	Fallback string
 	// Passthrough are fixed-name models without Pinball (models.yaml `passthrough:`).
