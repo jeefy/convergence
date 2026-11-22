@@ -42,9 +42,9 @@ func (f configFlags) options() (clientconfig.Options, error) {
 	return clientconfig.Options{GatewayURL: url, Passthrough: passthrough, SetDefault: f.setDefault, DryRun: f.dryRun, Force: f.force}, nil
 }
 
-// localPassthrough lists the passthrough model names in the local models.yaml,
+// localPassthrough returns the passthrough entries of the local models.yaml,
 // also with --gateway-url: the file is the source for the gateway it was rendered into.
-func localPassthrough() ([]string, error) {
+func localPassthrough() ([]models.Passthrough, error) {
 	dir, err := config.GetConfigDir()
 	if err != nil {
 		return nil, err
@@ -56,15 +56,7 @@ func localPassthrough() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading models.yaml: %w", err)
 	}
-	pt, err := models.ParsePassthrough(data)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, len(pt))
-	for i, p := range pt {
-		names[i] = p.Name
-	}
-	return names, nil
+	return models.ParsePassthrough(data)
 }
 
 func runClient(cmd *cobra.Command, name string, args []string, f configFlags) error {

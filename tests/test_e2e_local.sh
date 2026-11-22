@@ -356,6 +356,12 @@ assert [m["role"] for m in r["messages"]] == ["user"] and r["messages"][0]["cont
   bin_has 'config opencode' config paseo || fail "config paseo did not warn about the missing OpenCode provider"
   grep -q '"convergence-claude"' "$pc" || fail "paseo config lacks the convergence-claude provider"
   grep -q '"convergence-opencode"' "$pc" || fail "paseo config lacks the convergence-opencode provider"
+  grep -q '"convergence-copilot"' "$pc" || fail "paseo config lacks the convergence-copilot provider"
+  if grep -q 'CLAUDE_E2E_A_TOKEN' "$TEST_HOME/.convergence/models.yaml" 2>/dev/null; then
+    grep -q '"convergence-claude-e2e-a"' "$pc" || fail "paseo config lacks the per-account provider convergence-claude-e2e-a"
+    grep -q '"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-e2e-a"' "$pc" || fail "account provider sonnet slot not on its own model"
+  fi
+  grep -q "\"COPILOT_PROVIDER_BASE_URL\": \"http://localhost:$GW/v1\"" "$pc" || fail "paseo copilot provider not pointed at the gateway /v1"
   grep -q "\"ANTHROPIC_BASE_URL\": \"http://localhost:$GW\"" "$pc" || fail "paseo claude provider not pointed at the gateway root"
   [ "$(stat -c %a "$pc" 2>/dev/null || stat -f %Lp "$pc")" = 600 ] || fail "paseo config.json is not 0600"
   bin_has 'already up to date' config paseo || fail "config paseo not idempotent"
