@@ -5,7 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
+
+	"github.com/jeefy/convergence/internal/models"
 )
 
 type Format int
@@ -21,9 +25,9 @@ const Key = "convergence"
 // (e.g. http://localhost:3000); a trailing /v1 is tolerated and removed.
 type Options struct {
 	GatewayURL string
-	// Passthrough are extra model names the gateway serves (models.yaml
+	// Passthrough are the extra models the gateway serves (models.yaml
 	// `passthrough:`), offered by writers that list models per provider.
-	Passthrough []string
+	Passthrough []models.Passthrough
 	SetDefault  bool
 	DryRun      bool
 	Force       bool
@@ -78,10 +82,13 @@ func PaseoHome(h string) string {
 	return filepath.Join(h, ".paseo")
 }
 
-// Paseo provider ids added under agents.providers.
+// Paseo provider ids added under agents.providers. Each Claude subscription
+// account (models.yaml passthrough with auth: oauth) also gets
+// PaseoClaude + "-" + paseoAccountID(api_key_env).
 const (
 	PaseoClaude   = Key + "-claude"
 	PaseoOpenCode = Key + "-opencode"
+	PaseoCopilot  = Key + "-copilot"
 )
 
 func paseoModel(id, label string, def bool) map[string]any {
@@ -90,6 +97,91 @@ func paseoModel(id, label string, def bool) map[string]any {
 		m["isDefault"] = true
 	}
 	return m
+}
+
+type claudeAccount struct {
+	id     string
+	keyEnv string
+	models []models.Passthrough
+}
+
+// splitClaudeAccounts separates subscription (auth: oauth) passthrough models,
+// grouped per api_key_env, from the rest.
+func splitClaudeAccounts(ps []models.Passthrough) (shared []models.Passthrough, accts []claudeAccount) {
+	byEnv := map[string][]models.Passthrough{}
+	for _, p := range ps {
+		if p.Auth == models.AuthOAuth {
+			byEnv[p.KeyEnv] = append(byEnv[p.KeyEnv], p)
+		} else {
+			shared = append(shared, p)
+		}
+	}
+	envs := make([]string, 0, len(byEnv))
+	for e := range byEnv {
+		envs = append(envs, e)
+	}
+	sort.Strings(envs)
+	used := map[string]bool{}
+	for _, e := range envs {
+		id := paseoAccountID(e)
+		if used[id] {
+			id = strings.ReplaceAll(strings.ToLower(e), "_", "-")
+		}
+		used[id] = true
+		accts = append(accts, claudeAccount{id: id, keyEnv: e, models: byEnv[e]})
+	}
+	return shared, accts
+}
+
+// paseoAccountID shortens an env var name: CLAUDE_JEEFY_TOKEN -> jeefy.
+func paseoAccountID(keyEnv string) string {
+	s := strings.ToLower(keyEnv)
+	for _, p := range []string{"claude_", "anthropic_"} {
+		s = strings.TrimPrefix(s, p)
+	}
+	for _, x := range []string{"_oauth_token", "_token", "_key"} {
+		s = strings.TrimSuffix(s, x)
+	}
+	if s == "" {
+		s = strings.ToLower(keyEnv)
+	}
+	return strings.ReplaceAll(s, "_", "-")
+}
+
+// newestFamily returns the passthrough name whose upstream model is the newest
+// of a family ("opus", "sonnet", "haiku"), or "".
+func newestFamily(ps []models.Passthrough, family string) string {
+	best, bestV := "", []int(nil)
+	for _, p := range ps {
+		if !strings.Contains(p.Model, family) {
+			continue
+		}
+		if v := modelVersion(p.Model); best == "" || versionLess(bestV, v) {
+			best, bestV = p.Name, v
+		}
+	}
+	return best
+}
+
+// modelVersion extracts version numbers from an upstream model id, skipping
+// 8-digit date stamps: claude-opus-4-5-20251101 -> [4 5].
+func modelVersion(m string) []int {
+	var v []int
+	for _, f := range strings.FieldsFunc(m, func(r rune) bool { return r == '-' || r == '.' }) {
+		if n, err := strconv.Atoi(f); err == nil && len(f) < 8 {
+			v = append(v, n)
+		}
+	}
+	return v
+}
+
+func versionLess(a, b []int) bool {
+	for i := 0; i < len(a) && i < len(b); i++ {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return len(a) < len(b)
 }
 
 // OMPAgentDir returns the agent directory omp uses: $PI_CODING_AGENT_DIR,
@@ -177,7 +269,8 @@ var clients = []client{
 			}
 		},
 		pointed: func(d map[string]any) bool { return lookupString(d, "env", "ANTHROPIC_AUTH_TOKEN") == Key },
-		note:    "Uses ANTHROPIC_AUTH_TOKEN (Authorization: Bearer). An existing ANTHROPIC_API_KEY in env is left alone.",
+		note: "Uses ANTHROPIC_AUTH_TOKEN (Authorization: Bearer). An existing ANTHROPIC_API_KEY in env is left alone. " +
+			"This routes every Claude Code run through the gateway; to keep a direct path, use `convergence config paseo` instead.",
 	},
 	{
 		name:   "aider",
@@ -320,16 +413,27 @@ var clients = []client{
 		mode:   0o600, // config.json also holds the daemon password hash and provider env
 		path:   func(h string) string { return filepath.Join(PaseoHome(h), "config.json") },
 		ops: func(o Options, root string) []setOp {
-			claude := []any{
-				paseoModel("auto", "Convergence Auto", true),
+			shared, accts := splitClaudeAccounts(o.Passthrough)
+			tiers := func() []any {
+				return []any{
+					paseoModel("auto", "Convergence Auto", true),
+					paseoModel("light", "Convergence Light", false),
+					paseoModel("standard", "Convergence Standard", false),
+					paseoModel("heavy", "Convergence Heavy", false),
+				}
+			}
+			claude := tiers()
+			// The Copilot CLI reserves "auto" for its own router and rejects it under BYOK.
+			copilot := []any{
+				paseoModel("standard", "Convergence Standard", true),
 				paseoModel("light", "Convergence Light", false),
-				paseoModel("standard", "Convergence Standard", false),
 				paseoModel("heavy", "Convergence Heavy", false),
 			}
-			for _, n := range o.Passthrough {
-				claude = append(claude, paseoModel(n, n+" (passthrough)", false))
+			for _, p := range shared {
+				claude = append(claude, paseoModel(p.Name, p.Name+" (passthrough)", false))
+				copilot = append(copilot, paseoModel(p.Name, p.Name+" (passthrough)", false))
 			}
-			return []setOp{
+			ops := []setOp{
 				{path: []string{"agents", "providers", PaseoClaude}, val: map[string]any{
 					"extends": "claude",
 					"label":   "Convergence (Claude Code)",
@@ -345,7 +449,50 @@ var clients = []client{
 					"disallowedTools": []any{"WebSearch"},
 					"models":          claude,
 				}},
-				{path: []string{"agents", "providers", PaseoOpenCode}, val: map[string]any{
+			}
+			for _, a := range accts {
+				env := map[string]any{"ANTHROPIC_BASE_URL": root, "ANTHROPIC_AUTH_TOKEN": Key}
+				def := ""
+				for _, f := range []struct{ family, envKey string }{
+					{"opus", "ANTHROPIC_DEFAULT_OPUS_MODEL"},
+					{"sonnet", "ANTHROPIC_DEFAULT_SONNET_MODEL"},
+					{"haiku", "ANTHROPIC_DEFAULT_HAIKU_MODEL"},
+				} {
+					if n := newestFamily(a.models, f.family); n != "" {
+						env[f.envKey] = n
+						if def == "" {
+							def = n
+						}
+					}
+				}
+				if def == "" {
+					def = a.models[0].Name
+				}
+				var ms []any
+				for _, p := range a.models {
+					ms = append(ms, paseoModel(p.Name, p.Name, p.Name == def))
+				}
+				ops = append(ops, setOp{path: []string{"agents", "providers", PaseoClaude + "-" + a.id}, val: map[string]any{
+					"extends":         "claude",
+					"label":           "Convergence (Claude Code, " + a.id + ")",
+					"env":             env,
+					"disallowedTools": []any{"WebSearch"},
+					"models":          ms,
+				}})
+			}
+			return append(ops,
+				setOp{path: []string{"agents", "providers", PaseoCopilot}, val: map[string]any{
+					"extends": "copilot",
+					"label":   "Convergence (Copilot)",
+					// Copilot CLI BYOK (`copilot help environment`): OpenAI chat completions under /v1.
+					"env": map[string]any{
+						"COPILOT_PROVIDER_BASE_URL": root + "/v1",
+						"COPILOT_PROVIDER_API_KEY":  Key,
+						"COPILOT_MODEL":             "standard",
+					},
+					"models": copilot,
+				}},
+				setOp{path: []string{"agents", "providers", PaseoOpenCode}, val: map[string]any{
 					"extends": "opencode",
 					"label":   "Convergence (OpenCode)",
 					"models": []any{
@@ -356,10 +503,11 @@ var clients = []client{
 						paseoModel(Key+"/heavy", "Convergence Heavy", false),
 					},
 				}},
-			}
+			)
 		},
 		pointed: func(d map[string]any) bool { _, ok := lookup(d, "agents", "providers", PaseoClaude); return ok },
-		note: "Adds providers " + PaseoClaude + " and " + PaseoOpenCode + "; the built-in providers are untouched. " +
+		note: "Adds providers " + PaseoClaude + ", " + PaseoCopilot + ", " + PaseoOpenCode + " and one " + PaseoClaude + "-<account> " +
+			"per Claude subscription account (passthrough auth: oauth); the built-in claude and copilot providers are untouched (direct). " +
 			"Run `paseo reload` to apply. " + PaseoOpenCode + " needs `convergence config opencode` as well.",
 	},
 	{

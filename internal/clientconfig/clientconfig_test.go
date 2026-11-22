@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jeefy/convergence/internal/models"
 	"github.com/jeefy/convergence/internal/testhome"
 )
 
@@ -323,7 +324,7 @@ func TestPaseoHomeModeAndPassthrough(t *testing.T) {
 	d := filepath.Join(h, "elsewhere")
 	t.Setenv("PASEO_HOME", d)
 	p := filepath.Join(d, "config.json")
-	o := Options{GatewayURL: gw + "/v1", Passthrough: []string{"glm-5.2"}}
+	o := Options{GatewayURL: gw + "/v1", Passthrough: []models.Passthrough{{Name: "glm-5.2", Provider: models.UpstreamOllama, Model: "glm-5.2"}}}
 	if _, err := Configure("paseo", o); err != nil {
 		t.Fatal(err)
 	}
@@ -372,6 +373,59 @@ func TestPaseoHomeModeAndPassthrough(t *testing.T) {
 	for _, s := range sts {
 		if s.Client == "paseo" && (!s.Pointed || s.Path != p) {
 			t.Errorf("paseo status = %+v", s)
+		}
+	}
+}
+
+func TestPaseoClaudeAccountsAndCopilot(t *testing.T) {
+	testhome.Set(t, t.TempDir())
+	pt := []models.Passthrough{
+		{Name: "glm-5.2", Provider: models.UpstreamOllama, Model: "glm-5.2"},
+		{Name: "claude-jeefy-opus-4-5", Provider: models.UpstreamAnthropic, Model: "claude-opus-4-5-20251101", KeyEnv: "CLAUDE_JEEFY_TOKEN", Auth: models.AuthOAuth},
+		{Name: "claude-jeefy-opus-5-5", Provider: models.UpstreamAnthropic, Model: "claude-opus-5-5", KeyEnv: "CLAUDE_JEEFY_TOKEN", Auth: models.AuthOAuth},
+		{Name: "claude-jeefy-haiku-5-5", Provider: models.UpstreamAnthropic, Model: "claude-haiku-5-5", KeyEnv: "CLAUDE_JEEFY_TOKEN", Auth: models.AuthOAuth},
+		{Name: "claude-lf-sonnet", Provider: models.UpstreamAnthropic, Model: "claude-sonnet-4-5", KeyEnv: "CLAUDE_LF_TOKEN", Auth: models.AuthOAuth},
+	}
+	if _, err := Configure("paseo", Options{GatewayURL: gw, Passthrough: pt}); err != nil {
+		t.Fatal(err)
+	}
+	d, err := jsonGet([]byte(read(t, filepath.Join(PaseoHome(os.Getenv("HOME")), "config.json"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := func(prov, k string) string { return lookupString(d, "agents", "providers", prov, "env", k) }
+	j := PaseoClaude + "-jeefy"
+	if env(j, "ANTHROPIC_DEFAULT_OPUS_MODEL") != "claude-jeefy-opus-5-5" || env(j, "ANTHROPIC_DEFAULT_HAIKU_MODEL") != "claude-jeefy-haiku-5-5" {
+		t.Errorf("jeefy aliases: opus=%q haiku=%q", env(j, "ANTHROPIC_DEFAULT_OPUS_MODEL"), env(j, "ANTHROPIC_DEFAULT_HAIKU_MODEL"))
+	}
+	if env(j, "ANTHROPIC_DEFAULT_SONNET_MODEL") != "" {
+		t.Error("sonnet alias set without a sonnet model")
+	}
+	if env(PaseoClaude+"-lf", "ANTHROPIC_DEFAULT_SONNET_MODEL") != "claude-lf-sonnet" {
+		t.Error("lf account provider missing")
+	}
+	if env(PaseoCopilot, "COPILOT_PROVIDER_BASE_URL") != gw+"/v1" || env(PaseoCopilot, "COPILOT_PROVIDER_API_KEY") != Key {
+		t.Error("copilot provider env wrong")
+	}
+	if env(PaseoCopilot, "COPILOT_MODEL") != "standard" {
+		t.Error("copilot default model must not be auto (reserved by the Copilot CLI)")
+	}
+	raw := read(t, filepath.Join(PaseoHome(os.Getenv("HOME")), "config.json"))
+	shared, _ := lookup(d, "agents", "providers", PaseoClaude, "models")
+	for _, m := range shared.([]any) {
+		if strings.HasPrefix(m.(map[string]any)["id"].(string), "claude-jeefy") {
+			t.Error("subscription model listed on the shared provider")
+		}
+	}
+	if !strings.Contains(raw, `"glm-5.2"`) {
+		t.Error("shared passthrough missing")
+	}
+}
+
+func TestPaseoAccountID(t *testing.T) {
+	for in, want := range map[string]string{"CLAUDE_JEEFY_TOKEN": "jeefy", "ANTHROPIC_WORK_KEY": "work", "MY_ACCT": "my-acct", "CLAUDE_TOKEN": "token"} {
+		if got := paseoAccountID(in); got != want {
+			t.Errorf("%s: %q want %q", in, got, want)
 		}
 	}
 }
