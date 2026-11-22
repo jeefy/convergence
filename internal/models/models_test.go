@@ -258,6 +258,44 @@ func TestPinballKeywordsAndContextScoring(t *testing.T) {
 	}
 }
 
+func TestPinballStickyAndWrappedUserMessages(t *testing.T) {
+	apply := func(y string) (*Resolved, error) {
+		p, err := ParsePinball([]byte(y))
+		if err != nil {
+			return nil, err
+		}
+		r, _ := Resolve(config.ProviderCopilot, nil)
+		return r, r.ApplyPinball(p)
+	}
+	r, err := apply("pinball:\n  sticky: {sessions: 500}\n  wrapped_user_messages:\n    - {prefix: \"<skill>\", instruction_markers: [\"Task:\"], instruction_end: \"</skill>\"}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Sticky == nil || r.Sticky.Sessions != 500 || r.Sticky.TTLSeconds != 3600 {
+		t.Errorf("sticky = %+v, want sessions 500 and the default ttl 3600", r.Sticky)
+	}
+	want := `- {"prefix":"<skill>","instruction_markers":["Task:"],"instruction_end":"</skill>"}`
+	if got := r.WrappedLines(); len(got) != 1 || got[0] != want {
+		t.Errorf("wrapped lines %q, want %q", got, want)
+	}
+	// unset renders nothing
+	if r, err = apply("pinball:\n  thresholds: {standard: 1}\n"); err != nil || r.Sticky != nil || len(r.WrappedLines()) != 0 {
+		t.Errorf("unset must render nothing: %v %+v", err, r)
+	}
+	for _, bad := range []string{
+		"pinball:\n  sticky: {sessions: 0}\n",
+		"pinball:\n  sticky: {sessions: 5, ttl_seconds: -1}\n",
+		"pinball:\n  sticky: {ttl_seconds: 60}\n",
+		"pinball:\n  wrapped_user_messages: [{prefix: \"\"}]\n",
+		"pinball:\n  sticky: {sessions: 5, ttl: 60}\n",
+		"pinball:\n  wrapped_user_messages: [{prefix: x, marker: y}]\n",
+	} {
+		if _, err := apply(bad); err == nil {
+			t.Errorf("expected an error for %q", bad)
+		}
+	}
+}
+
 func TestPassthroughRejectsUnsafeName(t *testing.T) {
 	for _, n := range []string{`"x'y"`, `"a b"`, `"-x"`} {
 		if _, err := ParsePassthrough([]byte("passthrough:\n  " + n + ": {provider: copilot, model: m}\n")); err == nil {

@@ -52,6 +52,10 @@ type Resolved struct {
 	// HeavyKeywords and LightKeywords come from models.yaml `pinball.heavy_keywords` /
 	// `pinball.light_keywords`; nil renders pinball's defaults, empty turns the signal off.
 	HeavyKeywords, LightKeywords *[]string
+	// Sticky and Wrapped come from models.yaml `pinball.sticky` / `pinball.wrapped_user_messages`;
+	// unset renders nothing. Sticky needs a Pinball image newer than 0.8.0.
+	Sticky  *Sticky
+	Wrapped []WrappedUserMessage
 	// NormalizeReasoningEffort (models.yaml `pinball.normalize_reasoning_effort`) makes the gateway
 	// send Pinball's per-model reasoning_effort upstream. Needs a Pinball image newer than 0.8.0.
 	NormalizeReasoningEffort bool

@@ -92,6 +92,17 @@ pinball:
   light_keywords: [title, summarize, translate, titel, zusammenfassung]
 ```
 
+`wrapped_user_messages` lists user-role messages that are mostly client scaffolding (an injected skill file, say). Pinball scores only the text after the last `instruction_markers` hit, cut at `instruction_end`; with no marker the message is not scored, and it still counts toward prompt size. `prefix` is required. Pinball `0.8.0` accepts this key. Unset, nothing is rendered.
+
+`sticky: {sessions, ttl_seconds}` keeps a conversation on its tier (as a floor) and model while it still fits, so a config reload cannot move it mid-session and drop the prompt cache. `sessions` (conversations remembered, LRU) is required and greater than 0, `ttl_seconds` defaults to 3600. State is per Pinball process: lost on restart, not shared between replicas. **Needs a Pinball image newer than the pinned `0.8.0`** (`cluster install --image-pinball`, or `image_pinball` in `config.yaml` locally): `0.8.0` rejects the `sticky` key and does not start. Unset, nothing is rendered.
+
+```yaml
+pinball:
+  sticky: {sessions: 500, ttl_seconds: 3600}
+  wrapped_user_messages:
+    - {prefix: "<skill>", instruction_markers: ["Task:"], instruction_end: "</skill>"}
+```
+
 `normalize_reasoning_effort: true` makes the gateway send Pinball's per-model `reasoning_effort` upstream. Pinball (after 0.8.0) answers a normalized word for the chosen model in its `/check` reply (for example Copilot rejects `none` and `minimal`, and haiku-4.5 rejects any value); the gateway copies it into the ext_authz metadata and every `pinball-*` model sets `reasoning_effort` from it, next to the existing Copilot `messages` transformation. When Pinball sends none, the expression fails and agentgateway removes the field. **Needs a Pinball image newer than the pinned `0.8.0` (`cluster install --image-pinball`, or `image_pinball` in `config.yaml` locally):** `0.8.0` answers no `reasoning_effort`, so with the key on, the clients' own effort would be dropped. Off by default; nothing is rendered then.
 
 ```yaml

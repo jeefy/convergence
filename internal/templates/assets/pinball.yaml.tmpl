@@ -17,6 +17,17 @@ scoring:
   {{ . }}
 {{- end }}
 {{- end }}
+{{- if .Models.Sticky }}
+sticky:
+  sessions: {{ .Models.Sticky.Sessions }}
+  ttl_seconds: {{ .Models.Sticky.TTLSeconds }}
+{{- end }}
+{{- if .Models.WrappedLines }}
+wrapped_user_messages:
+{{- range .Models.WrappedLines }}
+  {{ . }}
+{{- end }}
+{{- end }}
 heavy_keywords:{{ if not .Models.HeavyKeywordLines }} []{{ end }}
 {{- range .Models.HeavyKeywordLines }}
   {{ . }}

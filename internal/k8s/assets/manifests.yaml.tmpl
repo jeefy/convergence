@@ -328,6 +328,17 @@ data:
       {{ . }}
 {{- end }}
 {{- end }}
+{{- if .R.Sticky }}
+    sticky:
+      sessions: {{ .R.Sticky.Sessions }}
+      ttl_seconds: {{ .R.Sticky.TTLSeconds }}
+{{- end }}
+{{- if .R.WrappedLines }}
+    wrapped_user_messages:
+{{- range .R.WrappedLines }}
+      {{ . }}
+{{- end }}
+{{- end }}
     heavy_keywords:{{ if not .R.HeavyKeywordLines }} []{{ end }}
 {{- range .R.HeavyKeywordLines }}
       {{ . }}
